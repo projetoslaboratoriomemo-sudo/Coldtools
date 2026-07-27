@@ -582,19 +582,39 @@ function interpolateByConcentration(table: ReadonlyArray<PressurePoint>, concent
   return lower[1] + ((concentration - lower[0]) / (upper[0] - lower[0])) * (upper[1] - lower[1]);
 }
 
+function concentrationForFreezingPoint(table: ReadonlyArray<PressurePoint>, targetTemperature: number) {
+  if (targetTemperature >= table[0][1]) return table[0][0];
+  if (targetTemperature <= table[table.length - 1][1]) return table[table.length - 1][0];
+  const upperIndex = table.findIndex((point) => point[1] <= targetTemperature);
+  const warmer = table[upperIndex - 1];
+  const colder = table[upperIndex];
+  return warmer[0] + ((targetTemperature - warmer[1]) / (colder[1] - warmer[1])) * (colder[0] - warmer[0]);
+}
+
 function AntifreezeMixture() {
+  const [mode, setMode] = useState("Informar proporção");
   const [mixture, setMixture] = useState<AntifreezeType>("Propilenoglicol");
   const [concentration, setConcentration] = useState("30");
+  const [operationTemperature, setOperationTemperature] = useState("-10");
   const [totalVolume, setTotalVolume] = useState("100");
   const [solutionTemperature, setSolutionTemperature] = useState("25");
+  const safetyMargin = 3;
   const isPropylene = mixture === "Propilenoglicol";
   const maximum = isPropylene ? 60 : 100;
-  const additivePercentage = Math.min(maximum, Math.max(0, n(concentration)));
-  const effectiveEthanol = mixture === "Álcool de cereais 96%" ? additivePercentage * .96 : additivePercentage;
-  const propertyConcentration = isPropylene ? additivePercentage : effectiveEthanol;
   const freezingTable = isPropylene ? propyleneFreezing : ethanolFreezing;
   const density25Table = isPropylene ? propyleneDensity25 : ethanolDensity25;
   const density0Table = isPropylene ? propyleneDensity0 : ethanolDensity0;
+  const targetFreezing = n(operationTemperature) - safetyMargin;
+  const requiredEffectiveConcentration = concentrationForFreezingPoint(freezingTable, targetFreezing);
+  const requiredProductConcentration = mixture === "Álcool de cereais 96%"
+    ? requiredEffectiveConcentration / .96
+    : requiredEffectiveConcentration;
+  const selectedConcentration = mode === "Informar temperatura de operação"
+    ? requiredProductConcentration
+    : n(concentration);
+  const additivePercentage = Math.min(maximum, Math.max(0, selectedConcentration));
+  const effectiveEthanol = mixture === "Álcool de cereais 96%" ? additivePercentage * .96 : additivePercentage;
+  const propertyConcentration = isPropylene ? additivePercentage : effectiveEthanol;
   const freezing = interpolateByConcentration(freezingTable, propertyConcentration);
   const density25 = interpolateByConcentration(density25Table, propertyConcentration);
   const density0 = interpolateByConcentration(density0Table, propertyConcentration);
@@ -606,7 +626,10 @@ function AntifreezeMixture() {
   const volume = Math.max(0, n(totalVolume));
   const additiveLiters = volume * additivePercentage / 100;
   const waterLiters = volume - additiveLiters;
-  const complete = concentration.trim() !== "" && totalVolume.trim() !== "" && solutionTemperature.trim() !== "" && volume > 0;
+  const achievedMargin = n(operationTemperature) - freezing;
+  const targetReachable = requiredProductConcentration <= maximum;
+  const complete = totalVolume.trim() !== "" && solutionTemperature.trim() !== "" && volume > 0
+    && (mode === "Informar proporção" ? concentration.trim() !== "" : operationTemperature.trim() !== "");
 
   function changeMixture(value: string) {
     const next = value as AntifreezeType;
@@ -617,31 +640,47 @@ function AntifreezeMixture() {
   return (
     <Calculator
       result={complete ? <>
+        {mode === "Informar temperatura de operação" && <ResultLine label="Concentração necessária" value={fmt(additivePercentage, 1)} unit="% v/v" />}
         <ResultLine label={mixture} value={fmt(additiveLiters, 1)} unit="L" />
         <ResultLine label="Água" value={fmt(waterLiters, 1)} unit="L" />
         <ResultLine label="Ponto de congelamento" value={fmt(freezing, 1)} unit="°C" />
+        {mode === "Informar temperatura de operação" && <ResultLine label="Margem de segurança adotada" value={fmt(safetyMargin, 1)} unit="°C" />}
+        {mode === "Informar temperatura de operação" && <ResultLine label="Margem efetivamente obtida" value={fmt(achievedMargin, 1)} unit="°C" />}
         <ResultLine label={`Densidade a ${fmt(requestedTemperature, 1)} °C`} value={fmt(densityAtRequestedTemperature * 1000, 1)} unit="kg/m³" />
         <ResultLine label="Densidade a 25 °C" value={fmt(density25 * 1000, 1)} unit="kg/m³" />
         <ResultLine label="Densidade a 0 °C" value={fmt(density0 * 1000, 1)} unit="kg/m³" />
         <ResultLine label={`Densidade a ${fmt(temperatureBeforeFreezing, 1)} °C`} value={fmt(densityBeforeFreezing * 1000, 1)} unit="kg/m³" />
       </> : undefined}
-      note={isPropylene
-        ? "Densidade estimada por interpolação térmica. Propilenoglicol limitado a 60% v/v; para proteção operacional, adote margem mínima de 3 °C abaixo da temperatura esperada."
-        : "Densidade estimada por interpolação térmica. Misturas com etanol são inflamáveis; avalie ventilação, classificação da área e compatibilidade dos materiais."}
+      note={mode === "Informar temperatura de operação" && !targetReachable
+        ? `A proteção solicitada ultrapassa o limite disponível de ${maximum}% v/v para este produto. O resultado foi limitado e a margem obtida ficou abaixo da adotada.`
+        : isPropylene
+          ? "Densidade estimada por interpolação térmica. Propilenoglicol limitado a 60% v/v; margem de segurança adotada: 3 °C."
+          : "Densidade estimada por interpolação térmica. Misturas com etanol são inflamáveis; avalie ventilação, classificação da área e compatibilidade dos materiais."}
     >
       <h2>Proporção e proteção contra congelamento</h2>
-      <p className="calc-intro">Informe o produto, a proporção, o volume final e a temperatura atual para obter a densidade da solução.</p>
+      <p className="calc-intro">Calcule pelas proporções conhecidas ou informe a temperatura de operação para dimensionar a solução.</p>
       <div className="form-grid">
+        <SelectField label="Modo de cálculo" value={mode} onChange={setMode} options={["Informar proporção","Informar temperatura de operação"]} />
         <SelectField label="Produto" value={mixture} onChange={changeMixture} options={["Propilenoglicol","Etanol","Álcool de cereais 96%"]} />
-        <Field label="Concentração do produto" unit="% v/v" value={concentration} onChange={setConcentration} />
+        {mode === "Informar proporção"
+          ? <Field label="Concentração do produto" unit="% v/v" value={concentration} onChange={setConcentration} />
+          : <Field label="Temperatura de operação desejada" unit="°C" value={operationTemperature} onChange={setOperationTemperature} />}
         <Field label="Volume final da solução" unit="L" value={totalVolume} onChange={setTotalVolume} />
         <Field label="Temperatura atual da solução" unit="°C" value={solutionTemperature} onChange={setSolutionTemperature} />
       </div>
-      <label className="pressure-ruler">
-        <span>CONCENTRAÇÃO DO PRODUTO</span>
-        <input type="range" min="0" max={maximum} step="1" value={additivePercentage} onChange={(event) => setConcentration(event.target.value)} />
-        <div><small>0%</small><strong>{fmt(additivePercentage, 0)}%</strong><small>{maximum}%</small></div>
-      </label>
+      {mode === "Informar proporção" ? (
+        <label className="pressure-ruler">
+          <span>CONCENTRAÇÃO DO PRODUTO</span>
+          <input type="range" min="0" max={maximum} step="1" value={additivePercentage} onChange={(event) => setConcentration(event.target.value)} />
+          <div><small>0%</small><strong>{fmt(additivePercentage, 0)}%</strong><small>{maximum}%</small></div>
+        </label>
+      ) : (
+        <div className={targetReachable ? "result-badge" : "result-badge warning"}>
+          {targetReachable
+            ? `Proteção dimensionada para ${fmt(targetFreezing, 1)} °C`
+            : "Temperatura fora da faixa de proteção disponível"}
+        </div>
+      )}
       {mixture === "Álcool de cereais 96%" && <p className="calc-intro">Concentração efetiva de etanol na solução: {fmt(effectiveEthanol, 1)}% v/v.</p>}
     </Calculator>
   );
