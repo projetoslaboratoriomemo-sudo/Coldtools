@@ -20,6 +20,7 @@ const tools: Tool[] = [
   { id: "conversor", title: "Conversor de refrigeração", description: "kW, kcal/h, BTU/h e TR.", category: "Refrigeração", icon: "❄", accent: "amber" },
   { id: "saturacao", title: "Régua de saturação", description: "Pressão em psig × temperatura do refrigerante.", category: "Refrigeração", icon: "↔", accent: "amber" },
   { id: "diagnostico-termico", title: "Superaquecimento e sub-resfriamento", description: "Calcule superaquecimento útil, total e sub-resfriamento.", category: "Refrigeração", icon: "∆", accent: "amber" },
+  { id: "solucoes-anticongelantes", title: "Soluções anticongelantes", description: "Proporção, congelamento e densidade da solução.", category: "Refrigeração", icon: "◒", accent: "amber" },
   { id: "orvalho", title: "Ponto de orvalho", description: "Temperatura, umidade e condensação.", category: "Refrigeração", icon: "◌", accent: "amber" },
   { id: "carga-termica", title: "Carga térmica / vazão", description: "Relação Q = m · c · ΔT.", category: "Refrigeração", icon: "⌂", accent: "amber" },
   { id: "orificio", title: "Cálculo de orifício", description: "Seleção para válvula de expansão.", category: "Refrigeração", icon: "◎", accent: "amber" },
@@ -196,6 +197,7 @@ function ToolWorkspace({
     conversor: <RefrigerationConverter />,
     saturacao: <SaturationRuler />,
     "diagnostico-termico": <ThermalDiagnostics />,
+    "solucoes-anticongelantes": <AntifreezeMixture />,
     orvalho: <DewPoint />,
     "carga-termica": <ThermalLoad />,
     orificio: <OrificeCalculator />,
@@ -558,6 +560,84 @@ function ThermalDiagnostics() {
         <Field label="Saída do condensador" unit="°C" value={values.condenserOutlet} onChange={change("condenserOutlet")} />
       </div>
       <button className="secondary" onClick={() => setValues({ lowPressure: "", highPressure: "", evaporatorOutlet: "", suction: "", condenserOutlet: "" })}>Limpar medições</button>
+    </Calculator>
+  );
+}
+
+type AntifreezeType = "Propilenoglicol" | "Etanol" | "Álcool de cereais 96%";
+
+const propyleneFreezing: ReadonlyArray<PressurePoint> = [[0,0],[10,-3],[20,-7],[30,-13],[40,-22],[50,-34],[60,-51]];
+const ethanolFreezing: ReadonlyArray<PressurePoint> = [[0,0],[10,-4],[20,-9],[30,-15],[40,-23],[50,-32],[60,-44],[70,-58],[80,-76],[90,-103],[100,-114]];
+const propyleneDensity25: ReadonlyArray<PressurePoint> = [[0,.997],[10,1.006],[20,1.015],[30,1.024],[40,1.033],[50,1.042],[60,1.05]];
+const propyleneDensity0: ReadonlyArray<PressurePoint> = [[0,.9998],[10,1.011],[20,1.022],[30,1.033],[40,1.046],[50,1.058],[60,1.07]];
+const ethanolDensity25: ReadonlyArray<PressurePoint> = [[0,.997],[10,.982],[20,.968],[30,.951],[40,.932],[50,.911],[60,.889],[70,.866],[80,.841],[90,.815],[100,.785]];
+const ethanolDensity0: ReadonlyArray<PressurePoint> = [[0,.9998],[10,.990],[20,.979],[30,.965],[40,.949],[50,.930],[60,.909],[70,.886],[80,.860],[90,.833],[100,.806]];
+
+function interpolateByConcentration(table: ReadonlyArray<PressurePoint>, concentration: number) {
+  if (concentration <= table[0][0]) return table[0][1];
+  if (concentration >= table[table.length - 1][0]) return table[table.length - 1][1];
+  const upperIndex = table.findIndex((point) => point[0] >= concentration);
+  const lower = table[upperIndex - 1];
+  const upper = table[upperIndex];
+  return lower[1] + ((concentration - lower[0]) / (upper[0] - lower[0])) * (upper[1] - lower[1]);
+}
+
+function AntifreezeMixture() {
+  const [mixture, setMixture] = useState<AntifreezeType>("Propilenoglicol");
+  const [concentration, setConcentration] = useState("30");
+  const [totalVolume, setTotalVolume] = useState("100");
+  const isPropylene = mixture === "Propilenoglicol";
+  const maximum = isPropylene ? 60 : 100;
+  const additivePercentage = Math.min(maximum, Math.max(0, n(concentration)));
+  const effectiveEthanol = mixture === "Álcool de cereais 96%" ? additivePercentage * .96 : additivePercentage;
+  const propertyConcentration = isPropylene ? additivePercentage : effectiveEthanol;
+  const freezingTable = isPropylene ? propyleneFreezing : ethanolFreezing;
+  const density25Table = isPropylene ? propyleneDensity25 : ethanolDensity25;
+  const density0Table = isPropylene ? propyleneDensity0 : ethanolDensity0;
+  const freezing = interpolateByConcentration(freezingTable, propertyConcentration);
+  const density25 = interpolateByConcentration(density25Table, propertyConcentration);
+  const density0 = interpolateByConcentration(density0Table, propertyConcentration);
+  const temperatureBeforeFreezing = Math.min(0, freezing + 1);
+  const densitySlope = (density0 - density25) / 25;
+  const densityBeforeFreezing = density0 + densitySlope * Math.abs(temperatureBeforeFreezing);
+  const volume = Math.max(0, n(totalVolume));
+  const additiveLiters = volume * additivePercentage / 100;
+  const waterLiters = volume - additiveLiters;
+  const complete = concentration.trim() !== "" && totalVolume.trim() !== "" && volume > 0;
+
+  function changeMixture(value: string) {
+    const next = value as AntifreezeType;
+    setMixture(next);
+    if (next === "Propilenoglicol" && n(concentration) > 60) setConcentration("60");
+  }
+
+  return (
+    <Calculator
+      result={complete ? <>
+        <ResultLine label={mixture} value={fmt(additiveLiters, 1)} unit="L" />
+        <ResultLine label="Água" value={fmt(waterLiters, 1)} unit="L" />
+        <ResultLine label="Ponto de congelamento" value={fmt(freezing, 1)} unit="°C" />
+        <ResultLine label="Densidade a 25 °C" value={fmt(density25 * 1000, 1)} unit="kg/m³" />
+        <ResultLine label="Densidade a 0 °C" value={fmt(density0 * 1000, 1)} unit="kg/m³" />
+        <ResultLine label={`Densidade a ${fmt(temperatureBeforeFreezing, 1)} °C`} value={fmt(densityBeforeFreezing * 1000, 1)} unit="kg/m³" />
+      </> : undefined}
+      note={isPropylene
+        ? "Estimativa para propilenoglicol em água, limitada a 60% v/v. Para proteção operacional, adote margem mínima de 3 °C abaixo da temperatura esperada."
+        : "Estimativa para etanol em água. Misturas com etanol são inflamáveis; avalie ventilação, classificação da área e compatibilidade dos materiais."}
+    >
+      <h2>Proporção e proteção contra congelamento</h2>
+      <p className="calc-intro">Informe o produto, sua participação em volume e o volume final que deseja preparar.</p>
+      <div className="form-grid">
+        <SelectField label="Produto" value={mixture} onChange={changeMixture} options={["Propilenoglicol","Etanol","Álcool de cereais 96%"]} />
+        <Field label="Concentração do produto" unit="% v/v" value={concentration} onChange={setConcentration} />
+        <Field label="Volume final da solução" unit="L" value={totalVolume} onChange={setTotalVolume} />
+      </div>
+      <label className="pressure-ruler">
+        <span>CONCENTRAÇÃO DO PRODUTO</span>
+        <input type="range" min="0" max={maximum} step="1" value={additivePercentage} onChange={(event) => setConcentration(event.target.value)} />
+        <div><small>0%</small><strong>{fmt(additivePercentage, 0)}%</strong><small>{maximum}%</small></div>
+      </label>
+      {mixture === "Álcool de cereais 96%" && <p className="calc-intro">Concentração efetiva de etanol na solução: {fmt(effectiveEthanol, 1)}% v/v.</p>}
     </Calculator>
   );
 }
