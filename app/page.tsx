@@ -19,6 +19,7 @@ const tools: Tool[] = [
   { id: "selecao-cabo", title: "Bitola de cabo", description: "Corrente admissível ou seção recomendada.", category: "Elétrica", icon: "⌁" },
   { id: "conversor", title: "Conversor de refrigeração", description: "kW, kcal/h, BTU/h e TR.", category: "Refrigeração", icon: "❄", accent: "amber" },
   { id: "saturacao", title: "Régua de saturação", description: "Pressão em psig × temperatura do refrigerante.", category: "Refrigeração", icon: "↔", accent: "amber" },
+  { id: "diagnostico-termico", title: "Superaquecimento e sub-resfriamento", description: "Calcule superaquecimento útil, total e sub-resfriamento.", category: "Refrigeração", icon: "∆", accent: "amber" },
   { id: "orvalho", title: "Ponto de orvalho", description: "Temperatura, umidade e condensação.", category: "Refrigeração", icon: "◌", accent: "amber" },
   { id: "carga-termica", title: "Carga térmica / vazão", description: "Relação Q = m · c · ΔT.", category: "Refrigeração", icon: "⌂", accent: "amber" },
   { id: "orificio", title: "Cálculo de orifício", description: "Seleção para válvula de expansão.", category: "Refrigeração", icon: "◎", accent: "amber" },
@@ -194,6 +195,7 @@ function ToolWorkspace({
     "selecao-cabo": <CableHub />,
     conversor: <RefrigerationConverter />,
     saturacao: <SaturationRuler />,
+    "diagnostico-termico": <ThermalDiagnostics />,
     orvalho: <DewPoint />,
     "carga-termica": <ThermalLoad />,
     orificio: <OrificeCalculator />,
@@ -460,6 +462,11 @@ const refrigerantPressureTable = {
   R290: [[-50,-4.46],[-45,-1.78],[-40,1.42],[-35,5.21],[-30,9.65],[-25,14.81],[-20,20.77],[-15,27.6],[-10,35.38],[-5,44.19],[0,54.12],[5,65.24],[10,77.64],[15,91.4],[20,106.62],[25,123.39],[30,141.8],[35,161.94],[40,183.92],[45,207.84],[50,233.8],[55,261.92],[60,292.31],[65,325.12],[70,360.48]],
 } as const;
 
+const refrigerantLiquidPressureTable = {
+  R410A: [[-50,1.11],[-45,5.48],[-40,10.76],[-35,17.06],[-30,24.51],[-25,33.25],[-20,43.42],[-15,55.17],[-10,68.64],[-5,84.01],[0,101.44],[5,121.09],[10,143.15],[15,167.8],[20,195.24],[25,225.67],[30,259.3],[35,296.37],[40,337.11],[45,381.8],[50,430.73],[55,484.21],[60,542.63],[65,606.45],[70,676.25]],
+  R404A: [[-50,-2.48],[-45,0.88],[-40,4.93],[-35,9.75],[-30,15.44],[-25,22.1],[-20,29.85],[-15,38.77],[-10,48.99],[-5,60.63],[0,73.8],[5,88.64],[10,105.26],[15,123.81],[20,144.43],[25,167.27],[30,192.47],[35,220.21],[40,250.66],[45,284.01],[50,320.47],[55,360.28],[60,403.74],[65,451.23],[70,503.39]],
+} as const;
+
 type Refrigerant = keyof typeof refrigerantPressureTable;
 type PressurePoint = readonly [temperature: number, pressure: number];
 
@@ -504,6 +511,53 @@ function SaturationRuler() {
         <input type="range" min={minimum} max={maximum} step="0.1" value={pressureValue} onChange={(event) => setPressure(event.target.value)} />
         <div><small>{fmt(minimum, 1)} psig</small><strong>{fmt(pressureValue, 1)} psig</strong><small>{fmt(maximum, 1)} psig</small></div>
       </label>
+    </Calculator>
+  );
+}
+
+function ThermalDiagnostics() {
+  const [fluid, setFluid] = useState<Refrigerant>("R134a");
+  const [values, setValues] = useState<Values>({
+    lowPressure: "",
+    highPressure: "",
+    evaporatorOutlet: "",
+    suction: "",
+    condenserOutlet: "",
+  });
+  const complete = Object.values(values).every((value) => value.trim() !== "" && Number.isFinite(n(value)));
+  const vaporTable = refrigerantPressureTable[fluid] as ReadonlyArray<PressurePoint>;
+  const liquidTable = (fluid === "R410A" || fluid === "R404A"
+    ? refrigerantLiquidPressureTable[fluid]
+    : vaporTable) as ReadonlyArray<PressurePoint>;
+  const lowSaturation = interpolateSaturationTemperature(vaporTable, n(values.lowPressure));
+  const highSaturation = interpolateSaturationTemperature(liquidTable, n(values.highPressure));
+  const usefulSuperheat = n(values.evaporatorOutlet) - lowSaturation;
+  const totalSuperheat = n(values.suction) - lowSaturation;
+  const subcooling = highSaturation - n(values.condenserOutlet);
+  const change = (key: string) => (value: string) => setValues((old) => ({ ...old, [key]: value }));
+
+  return (
+    <Calculator
+      result={complete ? <>
+        <ResultLine label="Superaquecimento útil" value={fmt(usefulSuperheat, 1)} unit="K" />
+        <ResultLine label="Superaquecimento total" value={fmt(totalSuperheat, 1)} unit="K" />
+        <ResultLine label="Sub-resfriamento" value={fmt(subcooling, 1)} unit="K" />
+        <ResultLine label="Saturação na baixa" value={fmt(lowSaturation, 1)} unit="°C" />
+        <ResultLine label="Saturação na alta" value={fmt(highSaturation, 1)} unit="°C" />
+      </> : undefined}
+      note="Baixa pressão convertida pela curva de vapor saturado (dew) e alta pressão pela curva de líquido saturado (bubble). Informe pressões manométricas em psig e temperaturas em °C."
+    >
+      <h2>Diagnóstico térmico do sistema</h2>
+      <p className="calc-intro">Preencha as pressões de operação e as três temperaturas medidas no circuito.</p>
+      <div className="form-grid">
+        <SelectField label="Fluido refrigerante" value={fluid} onChange={(value) => setFluid(value as Refrigerant)} options={Object.keys(refrigerantPressureTable)} />
+        <Field label="Pressão de baixa" unit="psig" value={values.lowPressure} onChange={change("lowPressure")} />
+        <Field label="Pressão de alta" unit="psig" value={values.highPressure} onChange={change("highPressure")} />
+        <Field label="Saída do evaporador" unit="°C" value={values.evaporatorOutlet} onChange={change("evaporatorOutlet")} />
+        <Field label="Temperatura de sucção" unit="°C" value={values.suction} onChange={change("suction")} />
+        <Field label="Saída do condensador" unit="°C" value={values.condenserOutlet} onChange={change("condenserOutlet")} />
+      </div>
+      <button className="secondary" onClick={() => setValues({ lowPressure: "", highPressure: "", evaporatorOutlet: "", suction: "", condenserOutlet: "" })}>Limpar medições</button>
     </Calculator>
   );
 }
