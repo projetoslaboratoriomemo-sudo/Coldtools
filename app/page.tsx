@@ -247,17 +247,28 @@ function Field({
   value,
   onChange,
   placeholder = "0",
+  allowNegative = false,
 }: {
   label: string;
   unit?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  allowNegative?: boolean;
 }) {
+  function toggleSign() {
+    if (value.startsWith("-")) onChange(value.slice(1));
+    else onChange(value ? `-${value}` : "-");
+  }
+
   return (
     <label className="field">
       <span>{label}</span>
-      <div><input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />{unit && <b>{unit}</b>}</div>
+      <div>
+        {allowNegative && <button type="button" className={value.startsWith("-") ? "sign-toggle negative" : "sign-toggle"} onClick={toggleSign} aria-label={value.startsWith("-") ? "Remover sinal negativo" : "Adicionar sinal negativo"}>{value.startsWith("-") ? "−" : "±"}</button>}
+        <input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+        {unit && <b>{unit}</b>}
+      </div>
     </label>
   );
 }
@@ -556,11 +567,11 @@ function ThermalDiagnostics() {
       <p className="calc-intro">Preencha as pressões de operação e as três temperaturas medidas no circuito.</p>
       <div className="form-grid">
         <SelectField label="Fluido refrigerante" value={fluid} onChange={(value) => setFluid(value as Refrigerant)} options={Object.keys(refrigerantPressureTable)} />
-        <Field label="Pressão de baixa" unit="psig" value={values.lowPressure} onChange={change("lowPressure")} />
-        <Field label="Pressão de alta" unit="psig" value={values.highPressure} onChange={change("highPressure")} />
-        <Field label="Saída do evaporador" unit="°C" value={values.evaporatorOutlet} onChange={change("evaporatorOutlet")} />
-        <Field label="Temperatura de sucção" unit="°C" value={values.suction} onChange={change("suction")} />
-        <Field label="Saída do condensador" unit="°C" value={values.condenserOutlet} onChange={change("condenserOutlet")} />
+        <Field label="Pressão de baixa" unit="psig" value={values.lowPressure} onChange={change("lowPressure")} allowNegative />
+        <Field label="Pressão de alta" unit="psig" value={values.highPressure} onChange={change("highPressure")} allowNegative />
+        <Field label="Saída do evaporador" unit="°C" value={values.evaporatorOutlet} onChange={change("evaporatorOutlet")} allowNegative />
+        <Field label="Temperatura de sucção" unit="°C" value={values.suction} onChange={change("suction")} allowNegative />
+        <Field label="Saída do condensador" unit="°C" value={values.condenserOutlet} onChange={change("condenserOutlet")} allowNegative />
       </div>
       <button className="secondary" onClick={() => setValues({ lowPressure: "", highPressure: "", evaporatorOutlet: "", suction: "", condenserOutlet: "" })}>Limpar medições</button>
     </Calculator>
@@ -869,6 +880,52 @@ const geometryShapeFields: Record<string, string[]> = {
   "Pirâmide retangular": ["Comprimento da base", "Largura da base", "Altura"],
 };
 
+function GeometryShapeIcon({ shape }: { shape: string }) {
+  const common = { fill: "none", stroke: "currentColor", strokeWidth: 2.4, strokeLinejoin: "round" as const };
+  return (
+    <svg viewBox="0 0 100 72" role="img" aria-label={`Desenho de ${shape}`}>
+      {shape === "Quadrado" && <rect x="25" y="11" width="50" height="50" {...common} />}
+      {shape === "Retângulo" && <rect x="13" y="19" width="74" height="38" {...common} />}
+      {shape === "Círculo" && <circle cx="50" cy="36" r="27" {...common} />}
+      {(shape === "Triângulo" || shape === "Triângulo por lados") && <polygon points="50,8 88,62 12,62" {...common} />}
+      {(shape === "Trapézio" || shape === "Trapézio por lados") && <polygon points="30,12 70,12 89,61 11,61" {...common} />}
+      {shape === "Elipse" && <ellipse cx="50" cy="36" rx="38" ry="23" {...common} />}
+      {shape === "Cubo" && <>
+        <rect x="20" y="22" width="43" height="38" {...common} />
+        <polyline points="20,22 37,10 80,10 63,22" {...common} />
+        <polyline points="63,22 80,10 80,48 63,60" {...common} />
+      </>}
+      {shape === "Paralelepípedo" && <>
+        <rect x="12" y="27" width="56" height="32" {...common} />
+        <polyline points="12,27 31,12 87,12 68,27" {...common} />
+        <polyline points="68,27 87,12 87,44 68,59" {...common} />
+      </>}
+      {shape === "Cilindro" && <>
+        <ellipse cx="50" cy="16" rx="27" ry="9" {...common} />
+        <path d="M23 16v39c0 5 12 9 27 9s27-4 27-9V16" {...common} />
+        <path d="M23 55c0-5 12-9 27-9s27 4 27 9" {...common} />
+      </>}
+      {shape === "Esfera" && <>
+        <circle cx="50" cy="36" r="28" {...common} />
+        <ellipse cx="50" cy="36" rx="28" ry="10" {...common} />
+        <ellipse cx="50" cy="36" rx="10" ry="28" {...common} />
+      </>}
+      {shape === "Cone" && <>
+        <ellipse cx="50" cy="57" rx="28" ry="8" {...common} />
+        <line x1="50" y1="7" x2="22" y2="57" {...common} />
+        <line x1="50" y1="7" x2="78" y2="57" {...common} />
+      </>}
+      {shape === "Pirâmide retangular" && <>
+        <polygon points="15,49 62,49 84,61 36,61" {...common} />
+        <line x1="50" y1="7" x2="15" y2="49" {...common} />
+        <line x1="50" y1="7" x2="62" y2="49" {...common} />
+        <line x1="50" y1="7" x2="84" y2="61" {...common} />
+        <line x1="50" y1="7" x2="36" y2="61" {...common} />
+      </>}
+    </svg>
+  );
+}
+
 function GeometryCalculator({ mode }: { mode: GeometryMode }) {
   const shapes = mode === "area"
     ? ["Quadrado", "Retângulo", "Círculo", "Triângulo", "Trapézio", "Elipse"]
@@ -932,8 +989,15 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
     >
       <h2>Cálculo de {title.toLocaleLowerCase("pt-BR")}</h2>
       <p className="calc-intro">Selecione a forma e informe suas dimensões usando a mesma unidade.</p>
+      <div className="shape-picker" aria-label="Escolha a forma geométrica">
+        {shapes.map((item) => (
+          <button key={item} className={shape === item ? "active" : ""} onClick={() => changeShape(item)}>
+            <GeometryShapeIcon shape={item} />
+            <span>{item}</span>
+          </button>
+        ))}
+      </div>
       <div className="form-grid">
-        <SelectField label="Forma geométrica" value={shape} onChange={changeShape} options={shapes} />
         <SelectField label="Unidade das medidas" value={unit} onChange={setUnit} options={["mm", "cm", "m"]} />
         {labels.map((label, index) => (
           <Field
