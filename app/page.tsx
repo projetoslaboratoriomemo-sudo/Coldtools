@@ -42,29 +42,92 @@ const nav: { label: Category; icon: string }[] = [
 
 function IntroScreen({ onEnter }: { onEnter: () => void }) {
   return (
-    <main className="intro-screen">
-      <div className="intro-aurora intro-aurora-one" />
-      <div className="intro-aurora intro-aurora-two" />
-      <div className="intro-content">
-        <div className="intro-emblem" aria-hidden="true">
-          <span className="intro-orbit orbit-one"><i>❄</i></span>
-          <span className="intro-orbit orbit-two"><i>ϟ</i></span>
-          <strong>RF</strong>
-        </div>
-        <span className="intro-kicker">Engenharia aplicada ao campo</span>
+    <main className="intro-screen cinematic">
+      <div className="cinematic-grid" />
+      <svg className="intro-machine" viewBox="0 0 800 800" aria-label="Animação de um circuito técnico de refrigeração e energia">
+        <defs>
+          <linearGradient id="coldFlow" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#66d17a" />
+            <stop offset=".48" stopColor="#70d9ff" />
+            <stop offset="1" stopColor="#f2a93b" />
+          </linearGradient>
+          <radialGradient id="coreGlow">
+            <stop offset="0" stopColor="#baffc4" stopOpacity=".85" />
+            <stop offset=".45" stopColor="#66d17a" stopOpacity=".28" />
+            <stop offset="1" stopColor="#66d17a" stopOpacity="0" />
+          </radialGradient>
+          <filter id="machineGlow" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="7" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <path id="flowPath" d="M400 104 C575 104 696 238 696 400 C696 562 575 696 400 696 C225 696 104 562 104 400 C104 238 225 104 400 104 Z" />
+        </defs>
+
+        <circle className="machine-halo halo-a" cx="400" cy="400" r="345" />
+        <circle className="machine-halo halo-b" cx="400" cy="400" r="310" />
+        <circle className="core-glow" cx="400" cy="400" r="210" fill="url(#coreGlow)" />
+
+        <use href="#flowPath" className="flow-track" />
+        <use href="#flowPath" className="flow-energy" />
+
+        {[0,1,2,3,4].map((particle) => (
+          <circle key={particle} className="flow-particle" r={particle === 0 ? 8 : 5}>
+            <animateMotion dur="5.4s" begin={`-${particle * 1.08}s`} repeatCount="indefinite" rotate="auto">
+              <mpath href="#flowPath" />
+            </animateMotion>
+          </circle>
+        ))}
+
+        <g className="compressor-unit">
+          <circle cx="400" cy="126" r="61" className="unit-shell" />
+          <circle cx="400" cy="126" r="38" className="compressor-rotor" />
+          <path d="M400 92 L418 126 L400 160 L382 126 Z" className="rotor-blade" />
+          <circle cx="400" cy="126" r="7" className="unit-core" />
+        </g>
+
+        <g className="condenser-unit">
+          <rect x="614" y="326" width="116" height="148" rx="20" className="unit-shell" />
+          <path d="M640 350 H704 L640 375 H704 L640 400 H704 L640 425 H704 L640 450 H704" className="coil-hot" />
+          <path d="M740 357 l20 -12 M740 400 h26 M740 443 l20 12" className="heat-rays" />
+        </g>
+
+        <g className="evaporator-unit">
+          <rect x="70" y="326" width="116" height="148" rx="20" className="unit-shell" />
+          <path d="M96 350 H160 L96 375 H160 L96 400 H160 L96 425 H160 L96 450 H160" className="coil-cold" />
+          <g className="snow-crystal" transform="translate(128 400)">
+            <path d="M0 -35 V35 M-30 -17 L30 17 M-30 17 L30 -17" />
+            <path d="M0 -35 l-7 9 M0 -35 l7 9 M0 35 l-7 -9 M0 35 l7 -9" />
+          </g>
+        </g>
+
+        <g className="valve-unit">
+          <circle cx="400" cy="696" r="45" className="unit-shell" />
+          <path d="M375 676 L425 716 M425 676 L375 716" className="valve-cross" />
+          <path d="M381 656 H419" className="valve-cap" />
+        </g>
+
+        <g className="energy-bolt" filter="url(#machineGlow)">
+          <path d="M438 250 L374 386 H422 L362 548 L485 362 H431 L490 250 Z" />
+        </g>
+
+        <g className="rf-core">
+          <circle cx="400" cy="400" r="112" />
+          <circle cx="400" cy="400" r="91" />
+          <text x="400" y="425" textAnchor="middle">RF</text>
+        </g>
+
+        <g className="spark-field">
+          {[[260,250],[544,250],[255,548],[548,548],[400,228],[400,574]].map(([x,y], index) => (
+            <circle key={index} cx={x} cy={y} r="4" style={{ animationDelay: `${index * .22}s` }} />
+          ))}
+        </g>
+      </svg>
+
+      <div className="cinematic-copy">
+        <span>O SISTEMA ESTÁ PRONTO</span>
         <h1>Coldtools</h1>
-        <p>Ferramentas técnicas para decisões rápidas, cálculos confiáveis e diagnósticos no dia a dia.</p>
-        <div className="intro-credit">
-          <small>Idealizado por</small>
-          <strong>Rafael Fabiani</strong>
-        </div>
-        <button className="intro-enter" onClick={onEnter}>
-          <span>Entrar nas ferramentas</span>
-          <b>→</b>
-        </button>
-      </div>
-      <div className="intro-footer">
-        <span>ELÉTRICA</span><i /><span>REFRIGERAÇÃO</span><i /><span>GEOMETRIA</span>
+        <p>Idealizado por <strong>Rafael Fabiani</strong></p>
+        <button onClick={onEnter}><b>Iniciar</b><i>→</i></button>
       </div>
     </main>
   );
