@@ -16,6 +16,7 @@ type Tool = {
 const tools: Tool[] = [
   { id: "potencia", title: "Cálculo de potência", description: "Potência, tensão, corrente e resistência.", category: "Elétrica", icon: "ϟ" },
   { id: "capacitor", title: "Cálculo de capacitor", description: "Dimensionamento de capacitor em circuito.", category: "Elétrica", icon: "▥" },
+  { id: "consumo-eletrico", title: "Consumo elétrico", description: "Energia e custo por hora, dia e mês.", category: "Elétrica", icon: "▤" },
   { id: "selecao-cabo", title: "Bitola de cabo", description: "Corrente admissível ou seção recomendada.", category: "Elétrica", icon: "⌁" },
   { id: "conversor", title: "Conversor de refrigeração", description: "kW, kcal/h, BTU/h e TR.", category: "Refrigeração", icon: "❄", accent: "amber" },
   { id: "saturacao", title: "Régua de saturação", description: "Pressão em psig × temperatura do refrigerante.", category: "Refrigeração", icon: "↔", accent: "amber" },
@@ -193,6 +194,7 @@ function ToolWorkspace({
   const content: Record<string, React.ReactNode> = {
     potencia: <PowerCalculator />,
     capacitor: <CapacitorCalculator />,
+    "consumo-eletrico": <ElectricalConsumption />,
     "selecao-cabo": <CableHub />,
     conversor: <RefrigerationConverter />,
     saturacao: <SaturationRuler />,
@@ -360,6 +362,78 @@ function CapacitorCalculator() {
         <Field label="Resistência da carga" unit="Ω" value={v.r} onChange={change("r")} />
         <Field label="Capacitor" unit="µF" value={v.c} onChange={change("c")} />
         <Field label="Frequência" unit="Hz" value={v.hz} onChange={change("hz")} />
+      </div>
+    </Calculator>
+  );
+}
+
+function ElectricalConsumption() {
+  const [power, setPower] = useState("1000");
+  const [powerUnit, setPowerUnit] = useState("W");
+  const [cycleMode, setCycleMode] = useState("Percentual de funcionamento");
+  const [dutyPercent, setDutyPercent] = useState("50");
+  const [onMinutes, setOnMinutes] = useState("10");
+  const [offMinutes, setOffMinutes] = useState("10");
+  const [hoursPerDay, setHoursPerDay] = useState("24");
+  const [daysPerMonth, setDaysPerMonth] = useState("30");
+  const [tariff, setTariff] = useState("1");
+  const nominalKw = powerUnit === "kW" ? n(power) : n(power) / 1000;
+  const cycleMinutes = Math.max(0, n(onMinutes)) + Math.max(0, n(offMinutes));
+  const calculatedDuty = cycleMode === "Percentual de funcionamento"
+    ? Math.min(100, Math.max(0, n(dutyPercent))) / 100
+    : cycleMinutes > 0 ? Math.max(0, n(onMinutes)) / cycleMinutes : 0;
+  const averageKw = nominalKw * calculatedDuty;
+  const dailyHours = Math.min(24, Math.max(0, n(hoursPerDay)));
+  const monthlyDays = Math.min(31, Math.max(0, n(daysPerMonth)));
+  const energyPerHour = averageKw;
+  const dailyEnergy = averageKw * dailyHours;
+  const monthlyEnergy = dailyEnergy * monthlyDays;
+  const rate = Math.max(0, n(tariff));
+  const costPerHour = energyPerHour * rate;
+  const dailyCost = dailyEnergy * rate;
+  const monthlyCost = monthlyEnergy * rate;
+  const equivalentHoursDay = dailyHours * calculatedDuty;
+  const complete = power.trim() !== "" && nominalKw >= 0 && hoursPerDay.trim() !== ""
+    && daysPerMonth.trim() !== "" && tariff.trim() !== ""
+    && (cycleMode === "Percentual de funcionamento"
+      ? dutyPercent.trim() !== ""
+      : onMinutes.trim() !== "" && offMinutes.trim() !== "" && cycleMinutes > 0);
+
+  return (
+    <Calculator
+      result={complete ? <>
+        <div className="result-badge">R$ {fmt(monthlyCost, 2)} / mês</div>
+        <ResultLine label="Potência média" value={fmt(averageKw, 3)} unit="kW" />
+        <ResultLine label="Consumo por hora" value={fmt(energyPerHour, 3)} unit="kWh" />
+        <ResultLine label="Consumo diário" value={fmt(dailyEnergy, 2)} unit="kWh" />
+        <ResultLine label="Consumo mensal" value={fmt(monthlyEnergy, 2)} unit="kWh" />
+        <ResultLine label="Custo por hora" value={`R$ ${fmt(costPerHour, 2)}`} />
+        <ResultLine label="Custo diário" value={`R$ ${fmt(dailyCost, 2)}`} />
+        <ResultLine label="Custo mensal" value={`R$ ${fmt(monthlyCost, 2)}`} />
+        <ResultLine label="Tempo equivalente ligado/dia" value={fmt(equivalentHoursDay, 2)} unit="h" />
+      </> : undefined}
+      note="Estimativa baseada na potência nominal e no ciclo de funcionamento. Equipamentos inverter ou com potência variável podem apresentar consumo diferente; para maior precisão, compare com um medidor de energia."
+    >
+      <h2>Consumo e custo de energia</h2>
+      <p className="calc-intro">Informe a potência, o comportamento ligado/desligado e o valor médio da energia.</p>
+      <div className="form-grid">
+        <Field label="Potência nominal" value={power} onChange={setPower} />
+        <SelectField label="Unidade da potência" value={powerUnit} onChange={setPowerUnit} options={["W", "kW"]} />
+        <SelectField label="Modo do ciclo" value={cycleMode} onChange={setCycleMode} options={["Percentual de funcionamento", "Tempo ligado/desligado"]} />
+        {cycleMode === "Percentual de funcionamento" ? (
+          <Field label="Tempo ligado no período" unit="%" value={dutyPercent} onChange={setDutyPercent} />
+        ) : <>
+          <Field label="Tempo ligado no ciclo" unit="min" value={onMinutes} onChange={setOnMinutes} />
+          <Field label="Tempo desligado no ciclo" unit="min" value={offMinutes} onChange={setOffMinutes} />
+        </>}
+        <Field label="Horas disponíveis por dia" unit="h/dia" value={hoursPerDay} onChange={setHoursPerDay} />
+        <Field label="Dias de operação no mês" unit="dias" value={daysPerMonth} onChange={setDaysPerMonth} />
+        <Field label="Tarifa média de energia" unit="R$/kWh" value={tariff} onChange={setTariff} />
+      </div>
+      <div className="conditions">
+        <span>Ciclo ligado: {fmt(calculatedDuty * 100, 1)}%</span>
+        <span>Potência nominal: {fmt(nominalKw, 3)} kW</span>
+        <span>{fmt(equivalentHoursDay, 2)} h ligadas por dia</span>
       </div>
     </Calculator>
   );
