@@ -106,6 +106,26 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
           <path d="M381 656 H419" className="valve-cap" />
         </g>
 
+        <g className="beer-scene" transform="translate(520 492)" filter="url(#machineGlow)">
+          <path className="beer-glass-outline" d="M4 4 H76 L68 112 Q66 130 50 134 H30 Q14 130 12 112 Z" />
+          <path className="beer-liquid" d="M13 46 H67 L62 111 Q61 120 50 123 H30 Q19 120 18 111 Z" />
+          <path className="beer-foam" d="M13 48 C17 35 29 40 34 31 C42 18 52 36 57 31 C66 23 72 37 67 49 Z" />
+          <path className="beer-handle" d="M73 30 H91 Q105 30 104 48 V83 Q104 101 86 101 H69" />
+          <g className="beer-bubbles">
+            <circle cx="28" cy="99" r="3" />
+            <circle cx="47" cy="106" r="2.5" />
+            <circle cx="56" cy="88" r="3.5" />
+            <circle cx="35" cy="78" r="2" />
+            <circle cx="52" cy="65" r="2.5" />
+          </g>
+          <g className="foam-dots">
+            <circle cx="22" cy="42" r="7" />
+            <circle cx="37" cy="34" r="9" />
+            <circle cx="53" cy="39" r="8" />
+            <circle cx="64" cy="43" r="6" />
+          </g>
+        </g>
+
         <g className="energy-bolt" filter="url(#machineGlow)">
           <path d="M438 250 L374 386 H422 L362 548 L485 362 H431 L490 250 Z" />
         </g>
