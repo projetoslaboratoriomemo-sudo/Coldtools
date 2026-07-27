@@ -18,11 +18,12 @@ const tools: Tool[] = [
   { id: "capacitor", title: "Cálculo de capacitor", description: "Dimensionamento de capacitor em circuito.", category: "Elétrica", icon: "▥" },
   { id: "selecao-cabo", title: "Bitola de cabo", description: "Corrente admissível ou seção recomendada.", category: "Elétrica", icon: "⌁" },
   { id: "conversor", title: "Conversor de refrigeração", description: "kW, kcal/h, BTU/h e TR.", category: "Refrigeração", icon: "❄", accent: "amber" },
+  { id: "saturacao", title: "Régua de saturação", description: "Pressão em psig × temperatura do refrigerante.", category: "Refrigeração", icon: "↔", accent: "amber" },
   { id: "orvalho", title: "Ponto de orvalho", description: "Temperatura, umidade e condensação.", category: "Refrigeração", icon: "◌", accent: "amber" },
   { id: "carga-termica", title: "Carga térmica / vazão", description: "Relação Q = m · c · ΔT.", category: "Refrigeração", icon: "⌂", accent: "amber" },
   { id: "orificio", title: "Cálculo de orifício", description: "Seleção para válvula de expansão.", category: "Refrigeração", icon: "◎", accent: "amber" },
   { id: "selecao-vazao", title: "Cálculo de vazão", description: "Vazão de ar ou de líquido.", category: "Vazão", icon: "≋" },
-  { id: "ferramentas", title: "Medições", description: "Luxímetro, sensor magnético e strobo.", category: "Ferramentas", icon: "▣", accent: "coral" },
+  { id: "ferramentas", title: "Ferramentas de campo", description: "Strobo e acesso rápido ao cálculo de orifício.", category: "Ferramentas", icon: "▣", accent: "coral" },
 ];
 
 const nav: { label: Category; icon: string }[] = [
@@ -192,6 +193,7 @@ function ToolWorkspace({
     capacitor: <CapacitorCalculator />,
     "selecao-cabo": <CableHub />,
     conversor: <RefrigerationConverter />,
+    saturacao: <SaturationRuler />,
     orvalho: <DewPoint />,
     "carga-termica": <ThermalLoad />,
     orificio: <OrificeCalculator />,
@@ -443,8 +445,65 @@ function DewPoint() {
   const gamma = rh > 0 ? Math.log(rh / 100) + (a * t) / (b + t) : NaN;
   const dew = (b * gamma) / (a - gamma);
   return (
-    <Calculator result={Number.isFinite(dew) ? <><ResultLine label="Ponto de orvalho" value={fmt(dew, 1)} unit="°C" /><ResultLine label="Margem até condensação" value={fmt(t - dew, 1)} unit="°C" /></> : undefined} note="Cálculo pela aproximação de Magnus. Superfícies abaixo do ponto de orvalho podem apresentar condensação.">
+    <Calculator result={Number.isFinite(dew) ? <ResultLine label="Ponto de orvalho" value={fmt(dew, 1)} unit="°C" /> : undefined} note="Cálculo pela aproximação de Magnus. Superfícies abaixo do ponto de orvalho podem apresentar condensação.">
       <h2>Condições do ambiente</h2><div className="form-grid"><Field label="Temperatura ambiente" unit="°C" value={temperature} onChange={setTemperature} /><Field label="Umidade relativa" unit="%" value={humidity} onChange={setHumidity} /></div>
+    </Calculator>
+  );
+}
+
+const refrigerantPressureTable = {
+  R134a: [[-50,-10.42],[-45,-9.02],[-40,-7.27],[-35,-5.1],[-30,-2.46],[-25,0.74],[-20,4.56],[-15,9.08],[-10,14.4],[-5,20.6],[0,27.77],[5,36.02],[10,45.44],[15,56.14],[20,68.22],[25,81.81],[30,97.01],[35,113.95],[40,132.75],[45,153.54],[50,176.45],[55,201.63],[60,229.23],[65,259.4],[70,292.32]],
+  R410A: [[-50,1.05],[-45,5.41],[-40,10.66],[-35,16.94],[-30,24.37],[-25,33.08],[-20,43.22],[-15,54.93],[-10,68.36],[-5,83.68],[0,101.06],[5,120.65],[10,142.64],[15,167.22],[20,194.58],[25,224.93],[30,258.47],[35,295.44],[40,336.09],[45,380.7],[50,429.55],[55,483.02],[60,541.5],[65,605.54],[70,675.93]],
+  R32: [[-50,1.28],[-45,5.7],[-40,11.04],[-35,17.41],[-30,24.96],[-25,33.83],[-20,44.15],[-15,56.09],[-10,69.81],[-5,85.46],[0,103.23],[5,123.3],[10,145.85],[15,171.07],[20,199.17],[25,230.36],[30,264.87],[35,302.91],[40,344.75],[45,390.65],[50,440.9],[55,495.82],[60,555.77],[65,621.19],[70,692.63]],
+  R22: [[-50,-5.34],[-45,-2.67],[-40,0.57],[-35,4.45],[-30,9.07],[-25,14.52],[-20,20.88],[-15,28.26],[-10,36.76],[-5,46.48],[0,57.53],[5,70.02],[10,84.07],[15,99.78],[20,117.29],[25,136.71],[30,158.17],[35,181.8],[40,207.73],[45,236.1],[50,267.07],[55,300.77],[60,337.38],[65,377.07],[70,420.04]],
+  R404A: [[-50,-2.95],[-45,0.34],[-40,4.3],[-35,9.04],[-30,14.64],[-25,21.2],[-20,28.84],[-15,37.66],[-10,47.78],[-5,59.3],[0,72.37],[5,87.09],[10,103.61],[15,122.06],[20,142.58],[25,165.33],[30,190.46],[35,218.14],[40,248.54],[45,281.87],[50,318.33],[55,358.19],[60,401.74],[65,449.43],[70,502.11]],
+  R290: [[-50,-4.46],[-45,-1.78],[-40,1.42],[-35,5.21],[-30,9.65],[-25,14.81],[-20,20.77],[-15,27.6],[-10,35.38],[-5,44.19],[0,54.12],[5,65.24],[10,77.64],[15,91.4],[20,106.62],[25,123.39],[30,141.8],[35,161.94],[40,183.92],[45,207.84],[50,233.8],[55,261.92],[60,292.31],[65,325.12],[70,360.48]],
+} as const;
+
+type Refrigerant = keyof typeof refrigerantPressureTable;
+type PressurePoint = readonly [temperature: number, pressure: number];
+
+function interpolateSaturationTemperature(table: ReadonlyArray<PressurePoint>, pressure: number) {
+  if (pressure <= table[0][1]) return table[0][0];
+  if (pressure >= table[table.length - 1][1]) return table[table.length - 1][0];
+  const upperIndex = table.findIndex((point) => point[1] >= pressure);
+  const lower = table[upperIndex - 1];
+  const upper = table[upperIndex];
+  return lower[0] + ((pressure - lower[1]) / (upper[1] - lower[1])) * (upper[0] - lower[0]);
+}
+
+function SaturationRuler() {
+  const [fluid, setFluid] = useState<Refrigerant>("R134a");
+  const [pressure, setPressure] = useState("27.8");
+  const table = refrigerantPressureTable[fluid] as ReadonlyArray<PressurePoint>;
+  const minimum = table[0][1];
+  const maximum = table[table.length - 1][1];
+  const pressureValue = Math.min(maximum, Math.max(minimum, n(pressure)));
+  const temperature = interpolateSaturationTemperature(table, pressureValue);
+
+  function changeFluid(nextFluid: string) {
+    const selected = nextFluid as Refrigerant;
+    const nextTable = refrigerantPressureTable[selected] as ReadonlyArray<PressurePoint>;
+    setFluid(selected);
+    setPressure(String(Math.round((nextTable[0][1] + nextTable[nextTable.length - 1][1]) / 2)));
+  }
+
+  return (
+    <Calculator
+      result={<><ResultLine label="Temperatura de saturação" value={fmt(temperature, 1)} unit="°C" /><ResultLine label="Pressão manométrica" value={fmt(pressureValue, 1)} unit="psig" /></>}
+      note="Curva de vapor saturado (dew), indicada para superaquecimento. Valores interpolados entre −50 °C e 70 °C; confirme a tabela do fabricante em aplicações críticas."
+    >
+      <h2>Régua pressão × temperatura</h2>
+      <p className="calc-intro">Selecione o fluido e mova a régua ou digite a pressão lida no manômetro.</p>
+      <div className="form-grid">
+        <SelectField label="Fluido refrigerante" value={fluid} onChange={changeFluid} options={Object.keys(refrigerantPressureTable)} />
+        <Field label="Pressão" unit="psig" value={pressure} onChange={setPressure} />
+      </div>
+      <label className="pressure-ruler">
+        <span>PRESSÃO NA RÉGUA</span>
+        <input type="range" min={minimum} max={maximum} step="0.1" value={pressureValue} onChange={(event) => setPressure(event.target.value)} />
+        <div><small>{fmt(minimum, 1)} psig</small><strong>{fmt(pressureValue, 1)} psig</strong><small>{fmt(maximum, 1)} psig</small></div>
+      </label>
     </Calculator>
   );
 }
@@ -554,46 +613,12 @@ function LiquidFlow() {
 }
 
 function MeasurementHub({ openTool }: { openTool: (id: string) => void }) {
-  const [screen, setScreen] = useState<"menu" | "lux" | "magnetic" | "strobe">("menu");
+  const [screen, setScreen] = useState<"menu" | "strobe">("menu");
   if (screen === "menu") return <ChoiceGrid title="Ferramentas disponíveis" choices={[
     { icon: "◎", title: "Cálculo de orifício", text: "Dimensione o orifício da válvula.", action: () => openTool("orificio"), image: "/app-assets/VALVULA.png" },
-    { icon: "☀", title: "Luxímetro", text: "Medições comparativas de luminosidade.", action: () => setScreen("lux"), image: "/app-assets/luximetro.png" },
-    { icon: "⊙", title: "Sensor magnético", text: "Detecte campo de bobinas e solenoides.", action: () => setScreen("magnetic") },
     { icon: "✺", title: "Strobo", text: "Pulso visual ajustável por RPM.", action: () => setScreen("strobe") },
   ]} />;
-  if (screen === "lux") return <InnerScreen title="Luxímetro comparativo" onBack={() => setScreen("menu")}><LuxMeter /></InnerScreen>;
-  if (screen === "magnetic") return <InnerScreen title="Sensor magnético" onBack={() => setScreen("menu")}><MagneticMeter /></InnerScreen>;
   return <InnerScreen title="Strobo" onBack={() => setScreen("menu")}><Strobe /></InnerScreen>;
-}
-
-function LuxMeter() {
-  const [lux, setLux] = useState("");
-  const [message, setMessage] = useState("Verificando disponibilidade do sensor...");
-  useEffect(() => {
-    let sensor: { start?: () => void; stop?: () => void; illuminance?: number; addEventListener?: (name: string, cb: () => void) => void } | null = null;
-    const Ambient = (window as unknown as { AmbientLightSensor?: new (options: { frequency: number }) => typeof sensor }).AmbientLightSensor;
-    if (Ambient) {
-      try {
-        sensor = new Ambient({ frequency: 2 });
-        sensor?.addEventListener?.("reading", () => setLux(String(Math.round(sensor?.illuminance ?? 0))));
-        sensor?.start?.();
-        setMessage("Sensor do dispositivo conectado.");
-      } catch { setMessage("O navegador bloqueou o sensor. Use a entrada manual comparativa."); }
-    } else setMessage("Sensor de luminosidade indisponível neste navegador. Use a entrada manual.");
-    return () => sensor?.stop?.();
-  }, []);
-  return <Calculator result={lux ? <><div className="gauge"><strong>{fmt(n(lux),0)}</strong><span>lux</span></div><ResultLine label="Classificação" value={n(lux) < 100 ? "Baixa" : n(lux) < 500 ? "Moderada" : "Alta"} /></> : undefined} note={message}><Field label="Leitura manual / sensor" unit="lux" value={lux} onChange={setLux} /></Calculator>;
-}
-
-function MagneticMeter() {
-  const [v, setV] = useState<Values>({ x: "", y: "", z: "" });
-  const magnitude = Math.sqrt(n(v.x) ** 2 + n(v.y) ** 2 + n(v.z) ** 2);
-  const change = (key: string) => (value: string) => setV((old) => ({ ...old, [key]: value }));
-  return (
-    <Calculator result={magnitude > 0 ? <><div className={`coil-state ${magnitude > 50 ? "on" : ""}`}>{magnitude > 50 ? "BOBINA ATIVA" : "CAMPO BAIXO"}</div><ResultLine label="Campo resultante" value={fmt(magnitude, 1)} unit="µT" /></> : undefined} note="A maioria dos navegadores móveis não libera o magnetômetro diretamente. Insira leituras X, Y e Z de um medidor disponível para comparar o campo.">
-      <div className="form-grid"><Field label="Eixo X" unit="µT" value={v.x} onChange={change("x")} /><Field label="Eixo Y" unit="µT" value={v.y} onChange={change("y")} /><Field label="Eixo Z" unit="µT" value={v.z} onChange={change("z")} /></div>
-    </Calculator>
-  );
 }
 
 function Strobe() {
