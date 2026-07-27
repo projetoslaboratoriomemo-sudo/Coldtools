@@ -40,7 +40,38 @@ const nav: { label: Category; icon: string }[] = [
   { label: "Geometria", icon: "◇" },
 ];
 
+function IntroScreen({ onEnter }: { onEnter: () => void }) {
+  return (
+    <main className="intro-screen">
+      <div className="intro-aurora intro-aurora-one" />
+      <div className="intro-aurora intro-aurora-two" />
+      <div className="intro-content">
+        <div className="intro-emblem" aria-hidden="true">
+          <span className="intro-orbit orbit-one"><i>❄</i></span>
+          <span className="intro-orbit orbit-two"><i>ϟ</i></span>
+          <strong>RF</strong>
+        </div>
+        <span className="intro-kicker">Engenharia aplicada ao campo</span>
+        <h1>Coldtools</h1>
+        <p>Ferramentas técnicas para decisões rápidas, cálculos confiáveis e diagnósticos no dia a dia.</p>
+        <div className="intro-credit">
+          <small>Idealizado por</small>
+          <strong>Rafael Fabiani</strong>
+        </div>
+        <button className="intro-enter" onClick={onEnter}>
+          <span>Entrar nas ferramentas</span>
+          <b>→</b>
+        </button>
+      </div>
+      <div className="intro-footer">
+        <span>ELÉTRICA</span><i /><span>REFRIGERAÇÃO</span><i /><span>GEOMETRIA</span>
+      </div>
+    </main>
+  );
+}
+
 export default function Home() {
+  const [showIntro, setShowIntro] = useState(true);
   const [category, setCategory] = useState<Category>("Início");
   const [query, setQuery] = useState("");
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
@@ -63,6 +94,8 @@ export default function Home() {
     setActiveTool(null);
     setQuery("");
   }
+
+  if (showIntro) return <IntroScreen onEnter={() => setShowIntro(false)} />;
 
   return (
     <div className="app-shell">
