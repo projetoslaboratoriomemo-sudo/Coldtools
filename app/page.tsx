@@ -690,42 +690,34 @@ function AntifreezeMixture() {
 
 type BeerStyle = "Lager leve" | "Pilsen / Lager" | "Weiss" | "Pale Ale" | "IPA" | "Porter" | "Stout" | "Belgian Ale" | "Sour" | "Barleywine / Imperial";
 
-const beerStyleResidualPlato: Record<BeerStyle, number> = {
-  "Lager leve": 1.8,
-  "Pilsen / Lager": 2.5,
-  "Weiss": 3,
-  "Pale Ale": 3.2,
-  "IPA": 3.5,
-  "Porter": 4,
-  "Stout": 4.6,
-  "Belgian Ale": 3,
-  "Sour": 2,
-  "Barleywine / Imperial": 6,
+const beerStyleProperties: Record<BeerStyle, { residualPlato: number; co2Volumes: number }> = {
+  "Lager leve": { residualPlato: 1.8, co2Volumes: 2.6 },
+  "Pilsen / Lager": { residualPlato: 2.5, co2Volumes: 2.6 },
+  "Weiss": { residualPlato: 3, co2Volumes: 3 },
+  "Pale Ale": { residualPlato: 3.2, co2Volumes: 2.4 },
+  "IPA": { residualPlato: 3.5, co2Volumes: 2.4 },
+  "Porter": { residualPlato: 4, co2Volumes: 2.2 },
+  "Stout": { residualPlato: 4.6, co2Volumes: 2.1 },
+  "Belgian Ale": { residualPlato: 3, co2Volumes: 3 },
+  "Sour": { residualPlato: 2, co2Volumes: 2.7 },
+  "Barleywine / Imperial": { residualPlato: 6, co2Volumes: 2.1 },
 };
 
-function gravityToPlato(gravity: number) {
-  return -616.868 + 1111.14 * gravity - 630.272 * gravity ** 2 + 135.997 * gravity ** 3;
-}
-
 function BeerFreezingPoint() {
-  const [mode, setMode] = useState("Estimativa rápida");
   const [style, setStyle] = useState<BeerStyle>("Pilsen / Lager");
   const [abv, setAbv] = useState("5");
-  const [finalGravity, setFinalGravity] = useState("1.010");
   const alcoholByVolume = Math.max(0, n(abv));
-  const gravity = Math.max(.98, n(finalGravity));
-  const residualPlato = mode === "Estimativa técnica"
-    ? Math.max(0, gravityToPlato(gravity))
-    : beerStyleResidualPlato[style];
-  const alcoholByWeight = alcoholByVolume * .789 / Math.max(gravity, .98);
-  const estimatedFreezing = -(0.42 * alcoholByWeight + 0.04 * residualPlato);
-  const uncertainty = mode === "Estimativa técnica" ? .3 : .6;
+  const properties = beerStyleProperties[style];
+  const alcoholDepression = .42 * alcoholByVolume;
+  const extractDepression = .04 * properties.residualPlato;
+  const carbonationDepression = .083 * properties.co2Volumes;
+  const estimatedFreezing = -(alcoholDepression + extractDepression + carbonationDepression);
+  const uncertainty = .4;
   const warmerLimit = estimatedFreezing + uncertainty;
   const colderLimit = estimatedFreezing - uncertainty;
   const operatingMargin = 1.5;
   const recommendedMinimum = estimatedFreezing + operatingMargin;
-  const complete = abv.trim() !== "" && alcoholByVolume >= 0
-    && (mode === "Estimativa rápida" || finalGravity.trim() !== "");
+  const complete = abv.trim() !== "" && alcoholByVolume >= 0;
 
   return (
     <Calculator
@@ -733,25 +725,21 @@ function BeerFreezingPoint() {
         <div className="result-badge">{fmt(estimatedFreezing, 1)} °C</div>
         <ResultLine label="Início estimado do congelamento" value={fmt(estimatedFreezing, 1)} unit="°C" />
         <ResultLine label="Faixa provável" value={`${fmt(colderLimit, 1)} a ${fmt(warmerLimit, 1)}`} unit="°C" />
-        <ResultLine label="Limite operacional recomendado" value={fmt(recommendedMinimum, 1)} unit="°C" />
+        <ResultLine label="Temperatura mínima recomendada" value={fmt(recommendedMinimum, 1)} unit="°C" />
         <ResultLine label="Margem operacional adotada" value={fmt(operatingMargin, 1)} unit="°C" />
-        <ResultLine label="Álcool estimado em massa" value={fmt(alcoholByWeight, 2)} unit="% m/m" />
-        <ResultLine label="Extrato residual considerado" value={fmt(residualPlato, 2)} unit="°P" />
       </> : undefined}
-      note="Estimativa do início de formação de cristais, não do congelamento total. Açúcares, dextrinas, carbonatação e ingredientes especiais podem alterar o resultado; valide experimentalmente processos críticos."
+      note="Estimativa simplificada do início de formação de cristais. O sistema considera automaticamente açúcar residual e carbonatação típicos do estilo; equipamentos com pontos frios podem congelar antes da temperatura indicada pelo sensor."
     >
-      <h2>Estimativa de congelamento da cerveja</h2>
-      <p className="calc-intro">Use o estilo para uma estimativa rápida ou informe a densidade final para melhorar a precisão.</p>
+      <h2>Estimativa rápida de congelamento</h2>
+      <p className="calc-intro">Escolha o estilo e informe apenas o teor alcoólico da cerveja.</p>
       <div className="form-grid">
-        <SelectField label="Modo de cálculo" value={mode} onChange={setMode} options={["Estimativa rápida","Estimativa técnica"]} />
-        <SelectField label="Estilo da cerveja" value={style} onChange={(value) => setStyle(value as BeerStyle)} options={Object.keys(beerStyleResidualPlato)} />
+        <SelectField label="Estilo da cerveja" value={style} onChange={(value) => setStyle(value as BeerStyle)} options={Object.keys(beerStyleProperties)} />
         <Field label="Teor alcoólico" unit="% ABV" value={abv} onChange={setAbv} />
-        {mode === "Estimativa técnica" && <Field label="Densidade final da cerveja" unit="SG" value={finalGravity} onChange={setFinalGravity} placeholder="1.010" />}
       </div>
       <div className="conditions">
-        <span>Formação inicial de gelo</span>
+        <span>Extrato típico: {fmt(properties.residualPlato, 1)} °P</span>
+        <span>Carbonatação típica: {fmt(properties.co2Volumes, 1)} vol. CO₂</span>
         <span>Margem operacional: 1,5 °C</span>
-        <span>{mode === "Estimativa técnica" ? "Cálculo com densidade final" : "Extrato típico pelo estilo"}</span>
       </div>
     </Calculator>
   );
