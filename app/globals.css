@@ -196,3 +196,12 @@ main { grid-column: 2; min-width: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+
+.pressure-ruler { display: block; margin-top: 26px; padding: 22px; border: 1px solid var(--line); border-radius: 13px; background: rgba(10,14,16,.28); }
+.pressure-ruler > span { display: block; margin-bottom: 18px; color: var(--amber); font-size: 10px; font-weight: 850; letter-spacing: .12em; }
+.pressure-ruler input { width: 100%; accent-color: var(--amber); }
+.pressure-ruler > div { margin-top: 12px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.pressure-ruler small { color: var(--muted); }
+.pressure-ruler small:last-child { text-align: right; }
+.pressure-ruler strong { color: var(--amber); font-size: 18px; }
