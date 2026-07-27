@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
-type Category = "Início" | "Elétrica" | "Refrigeração" | "Vazão" | "Ferramentas";
+type Category = "Início" | "Elétrica" | "Refrigeração" | "Vazão" | "Geometria";
 
 type Tool = {
   id: string;
@@ -26,7 +26,9 @@ const tools: Tool[] = [
   { id: "carga-termica", title: "Carga térmica / vazão", description: "Relação Q = m · c · ΔT.", category: "Refrigeração", icon: "⌂", accent: "amber" },
   { id: "orificio", title: "Cálculo de orifício", description: "Seleção para válvula de expansão.", category: "Refrigeração", icon: "◎", accent: "amber" },
   { id: "selecao-vazao", title: "Cálculo de vazão", description: "Vazão de ar ou de líquido.", category: "Vazão", icon: "≋" },
-  { id: "ferramentas", title: "Ferramentas de campo", description: "Strobo e acesso rápido ao cálculo de orifício.", category: "Ferramentas", icon: "▣", accent: "coral" },
+  { id: "geometria-area", title: "Cálculo de área", description: "Área de círculos, retângulos, triângulos e outras formas.", category: "Geometria", icon: "▱" },
+  { id: "geometria-perimetro", title: "Cálculo de perímetro", description: "Perímetro e circunferência de diversas formas.", category: "Geometria", icon: "⬡" },
+  { id: "geometria-volume", title: "Cálculo de volume", description: "Volume de sólidos geométricos e recipientes.", category: "Geometria", icon: "▣" },
 ];
 
 const nav: { label: Category; icon: string }[] = [
@@ -34,7 +36,7 @@ const nav: { label: Category; icon: string }[] = [
   { label: "Elétrica", icon: "ϟ" },
   { label: "Refrigeração", icon: "❄" },
   { label: "Vazão", icon: "◉" },
-  { label: "Ferramentas", icon: "⌕" },
+  { label: "Geometria", icon: "◇" },
 ];
 
 export default function Home() {
@@ -99,7 +101,6 @@ export default function Home() {
             <ToolWorkspace
               tool={activeTool}
               onBack={() => setActiveTool(null)}
-              openTool={(id) => setActiveTool(tools.find((item) => item.id === id) ?? activeTool)}
             />
           ) : (
             <>
@@ -185,11 +186,9 @@ function fmt(value: number, digits = 2) {
 function ToolWorkspace({
   tool,
   onBack,
-  openTool,
 }: {
   tool: Tool;
   onBack: () => void;
-  openTool: (id: string) => void;
 }) {
   const content: Record<string, React.ReactNode> = {
     potencia: <PowerCalculator />,
@@ -204,7 +203,9 @@ function ToolWorkspace({
     "carga-termica": <ThermalLoad />,
     orificio: <OrificeCalculator />,
     "selecao-vazao": <FlowHub />,
-    ferramentas: <MeasurementHub openTool={openTool} />,
+    "geometria-area": <GeometryCalculator mode="area" />,
+    "geometria-perimetro": <GeometryCalculator mode="perimeter" />,
+    "geometria-volume": <GeometryCalculator mode="volume" />,
   };
 
   return (
@@ -849,36 +850,103 @@ function LiquidFlow() {
   );
 }
 
-function MeasurementHub({ openTool }: { openTool: (id: string) => void }) {
-  const [screen, setScreen] = useState<"menu" | "strobe">("menu");
-  if (screen === "menu") return <ChoiceGrid title="Ferramentas disponíveis" choices={[
-    { icon: "◎", title: "Cálculo de orifício", text: "Dimensione o orifício da válvula.", action: () => openTool("orificio"), image: "/app-assets/VALVULA.png" },
-    { icon: "✺", title: "Strobo", text: "Pulso visual ajustável por RPM.", action: () => setScreen("strobe") },
-  ]} />;
-  return <InnerScreen title="Strobo" onBack={() => setScreen("menu")}><Strobe /></InnerScreen>;
-}
+type GeometryMode = "area" | "perimeter" | "volume";
 
-function Strobe() {
-  const [rpm, setRpm] = useState("600");
-  const [running, setRunning] = useState(false);
-  const [flash, setFlash] = useState(false);
-  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (timer.current) clearInterval(timer.current);
-    if (running) {
-      const hz = Math.min(15, Math.max(1, n(rpm) / 60));
-      timer.current = setInterval(() => setFlash((old) => !old), 500 / hz);
-    } else setFlash(false);
-    return () => { if (timer.current) clearInterval(timer.current); };
-  }, [running, rpm]);
+const geometryShapeFields: Record<string, string[]> = {
+  "Quadrado": ["Lado"],
+  "Retângulo": ["Comprimento", "Largura"],
+  "Círculo": ["Diâmetro"],
+  "Triângulo": ["Base", "Altura"],
+  "Trapézio": ["Base maior", "Base menor", "Altura"],
+  "Elipse": ["Eixo maior", "Eixo menor"],
+  "Triângulo por lados": ["Lado A", "Lado B", "Lado C"],
+  "Trapézio por lados": ["Lado A", "Lado B", "Lado C", "Lado D"],
+  "Cubo": ["Aresta"],
+  "Paralelepípedo": ["Comprimento", "Largura", "Altura"],
+  "Cilindro": ["Diâmetro", "Altura"],
+  "Esfera": ["Diâmetro"],
+  "Cone": ["Diâmetro", "Altura"],
+  "Pirâmide retangular": ["Comprimento da base", "Largura da base", "Altura"],
+};
+
+function GeometryCalculator({ mode }: { mode: GeometryMode }) {
+  const shapes = mode === "area"
+    ? ["Quadrado", "Retângulo", "Círculo", "Triângulo", "Trapézio", "Elipse"]
+    : mode === "perimeter"
+      ? ["Quadrado", "Retângulo", "Círculo", "Triângulo por lados", "Trapézio por lados", "Elipse"]
+      : ["Cubo", "Paralelepípedo", "Cilindro", "Esfera", "Cone", "Pirâmide retangular"];
+  const [shape, setShape] = useState(shapes[0]);
+  const [unit, setUnit] = useState("cm");
+  const [dimensions, setDimensions] = useState(["", "", "", ""]);
+  const labels = geometryShapeFields[shape];
+  const values = labels.map((_, index) => n(dimensions[index]));
+  const complete = values.every((value, index) => dimensions[index].trim() !== "" && value > 0);
+  let result = 0;
+
+  if (complete && mode === "area") {
+    if (shape === "Quadrado") result = values[0] ** 2;
+    else if (shape === "Retângulo") result = values[0] * values[1];
+    else if (shape === "Círculo") result = Math.PI * (values[0] / 2) ** 2;
+    else if (shape === "Triângulo") result = values[0] * values[1] / 2;
+    else if (shape === "Trapézio") result = (values[0] + values[1]) * values[2] / 2;
+    else if (shape === "Elipse") result = Math.PI * (values[0] / 2) * (values[1] / 2);
+  }
+
+  if (complete && mode === "perimeter") {
+    if (shape === "Quadrado") result = 4 * values[0];
+    else if (shape === "Retângulo") result = 2 * (values[0] + values[1]);
+    else if (shape === "Círculo") result = Math.PI * values[0];
+    else if (shape === "Triângulo por lados") result = values[0] + values[1] + values[2];
+    else if (shape === "Trapézio por lados") result = values[0] + values[1] + values[2] + values[3];
+    else if (shape === "Elipse") {
+      const a = values[0] / 2, b = values[1] / 2;
+      result = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+    }
+  }
+
+  if (complete && mode === "volume") {
+    if (shape === "Cubo") result = values[0] ** 3;
+    else if (shape === "Paralelepípedo") result = values[0] * values[1] * values[2];
+    else if (shape === "Cilindro") result = Math.PI * (values[0] / 2) ** 2 * values[1];
+    else if (shape === "Esfera") result = 4 / 3 * Math.PI * (values[0] / 2) ** 3;
+    else if (shape === "Cone") result = Math.PI * (values[0] / 2) ** 2 * values[1] / 3;
+    else if (shape === "Pirâmide retangular") result = values[0] * values[1] * values[2] / 3;
+  }
+
+  const title = mode === "area" ? "Área" : mode === "perimeter" ? "Perímetro" : "Volume";
+  const resultUnit = mode === "area" ? `${unit}²` : mode === "volume" ? `${unit}³` : unit;
+
+  function changeShape(value: string) {
+    setShape(value);
+    setDimensions(["", "", "", ""]);
+  }
+
   return (
-    <div className={`strobe-card ${flash ? "flash" : ""}`}>
-      <div className="strobe-warning">Atenção: luz intermitente. Não utilize se houver sensibilidade a flashes ou histórico de epilepsia.</div>
-      <label>Valor atual</label><strong>{rpm} <small>RPM</small></strong>
-      <input type="range" min="60" max="900" step="30" value={rpm} onChange={(e) => setRpm(e.target.value)} />
-      <div className="strobe-actions"><button onClick={() => setRpm(String(Math.max(60,n(rpm)-30)))}>−</button><button className="primary" onClick={() => setRunning((old) => !old)}>{running ? "Parar" : "Iniciar"}</button><button onClick={() => setRpm(String(Math.min(900,n(rpm)+30)))}>+</button></div>
-      <p>Frequência: {fmt(Math.min(15, Math.max(1, n(rpm) / 60)),1)} Hz. A versão web usa a tela; o flash da câmera depende de permissões que os navegadores normalmente não oferecem.</p>
-    </div>
+    <Calculator
+      result={complete ? <>
+        <div className="result-badge">{fmt(result, 4)} {resultUnit}</div>
+        <ResultLine label={title} value={fmt(result, 4)} unit={resultUnit} />
+        <ResultLine label="Forma selecionada" value={shape} />
+      </> : undefined}
+      note={shape === "Elipse" && mode === "perimeter" ? "Perímetro da elipse calculado pela aproximação de Ramanujan." : undefined}
+    >
+      <h2>Cálculo de {title.toLocaleLowerCase("pt-BR")}</h2>
+      <p className="calc-intro">Selecione a forma e informe suas dimensões usando a mesma unidade.</p>
+      <div className="form-grid">
+        <SelectField label="Forma geométrica" value={shape} onChange={changeShape} options={shapes} />
+        <SelectField label="Unidade das medidas" value={unit} onChange={setUnit} options={["mm", "cm", "m"]} />
+        {labels.map((label, index) => (
+          <Field
+            key={label}
+            label={label}
+            unit={unit}
+            value={dimensions[index]}
+            onChange={(value) => setDimensions((old) => old.map((item, itemIndex) => itemIndex === index ? value : item))}
+          />
+        ))}
+      </div>
+      <button className="secondary" onClick={() => setDimensions(["", "", "", ""])}>Limpar medidas</button>
+    </Calculator>
   );
 }
 
