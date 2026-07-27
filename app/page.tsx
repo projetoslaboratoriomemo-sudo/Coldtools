@@ -586,6 +586,7 @@ function AntifreezeMixture() {
   const [mixture, setMixture] = useState<AntifreezeType>("Propilenoglicol");
   const [concentration, setConcentration] = useState("30");
   const [totalVolume, setTotalVolume] = useState("100");
+  const [solutionTemperature, setSolutionTemperature] = useState("25");
   const isPropylene = mixture === "Propilenoglicol";
   const maximum = isPropylene ? 60 : 100;
   const additivePercentage = Math.min(maximum, Math.max(0, n(concentration)));
@@ -600,10 +601,12 @@ function AntifreezeMixture() {
   const temperatureBeforeFreezing = Math.min(0, freezing + 1);
   const densitySlope = (density0 - density25) / 25;
   const densityBeforeFreezing = density0 + densitySlope * Math.abs(temperatureBeforeFreezing);
+  const requestedTemperature = n(solutionTemperature);
+  const densityAtRequestedTemperature = density0 - densitySlope * requestedTemperature;
   const volume = Math.max(0, n(totalVolume));
   const additiveLiters = volume * additivePercentage / 100;
   const waterLiters = volume - additiveLiters;
-  const complete = concentration.trim() !== "" && totalVolume.trim() !== "" && volume > 0;
+  const complete = concentration.trim() !== "" && totalVolume.trim() !== "" && solutionTemperature.trim() !== "" && volume > 0;
 
   function changeMixture(value: string) {
     const next = value as AntifreezeType;
@@ -617,20 +620,22 @@ function AntifreezeMixture() {
         <ResultLine label={mixture} value={fmt(additiveLiters, 1)} unit="L" />
         <ResultLine label="Água" value={fmt(waterLiters, 1)} unit="L" />
         <ResultLine label="Ponto de congelamento" value={fmt(freezing, 1)} unit="°C" />
+        <ResultLine label={`Densidade a ${fmt(requestedTemperature, 1)} °C`} value={fmt(densityAtRequestedTemperature * 1000, 1)} unit="kg/m³" />
         <ResultLine label="Densidade a 25 °C" value={fmt(density25 * 1000, 1)} unit="kg/m³" />
         <ResultLine label="Densidade a 0 °C" value={fmt(density0 * 1000, 1)} unit="kg/m³" />
         <ResultLine label={`Densidade a ${fmt(temperatureBeforeFreezing, 1)} °C`} value={fmt(densityBeforeFreezing * 1000, 1)} unit="kg/m³" />
       </> : undefined}
       note={isPropylene
-        ? "Estimativa para propilenoglicol em água, limitada a 60% v/v. Para proteção operacional, adote margem mínima de 3 °C abaixo da temperatura esperada."
-        : "Estimativa para etanol em água. Misturas com etanol são inflamáveis; avalie ventilação, classificação da área e compatibilidade dos materiais."}
+        ? "Densidade estimada por interpolação térmica. Propilenoglicol limitado a 60% v/v; para proteção operacional, adote margem mínima de 3 °C abaixo da temperatura esperada."
+        : "Densidade estimada por interpolação térmica. Misturas com etanol são inflamáveis; avalie ventilação, classificação da área e compatibilidade dos materiais."}
     >
       <h2>Proporção e proteção contra congelamento</h2>
-      <p className="calc-intro">Informe o produto, sua participação em volume e o volume final que deseja preparar.</p>
+      <p className="calc-intro">Informe o produto, a proporção, o volume final e a temperatura atual para obter a densidade da solução.</p>
       <div className="form-grid">
         <SelectField label="Produto" value={mixture} onChange={changeMixture} options={["Propilenoglicol","Etanol","Álcool de cereais 96%"]} />
         <Field label="Concentração do produto" unit="% v/v" value={concentration} onChange={setConcentration} />
         <Field label="Volume final da solução" unit="L" value={totalVolume} onChange={setTotalVolume} />
+        <Field label="Temperatura atual da solução" unit="°C" value={solutionTemperature} onChange={setSolutionTemperature} />
       </div>
       <label className="pressure-ruler">
         <span>CONCENTRAÇÃO DO PRODUTO</span>
