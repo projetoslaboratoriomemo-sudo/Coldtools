@@ -41,113 +41,125 @@ const nav: { label: Category; icon: string }[] = [
 ];
 
 function IntroScreen({ onEnter }: { onEnter: () => void }) {
+  const snowflakes = [
+    [82,118,1.1],[154,214,.8],[696,126,1],[635,242,.7],[92,498,.8],[716,530,1.1],
+    [210,92,.65],[588,78,.75],[194,604,.9],[620,626,.7],[62,316,.6],[744,352,.7],
+  ];
+
   return (
-    <main className="intro-screen cinematic">
-      <div className="cinematic-grid" />
-      <svg className="intro-machine" viewBox="0 0 800 800" aria-label="Animação de um circuito técnico de refrigeração e energia">
+    <main className="intro-screen cold-beer-electric">
+      <div className="cold-vignette" />
+      <svg className="beer-machine" viewBox="0 0 800 760" aria-label="Chope sendo servido com gelo, refrigeração e energia elétrica">
         <defs>
-          <linearGradient id="coldFlow" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#66d17a" />
-            <stop offset=".48" stopColor="#70d9ff" />
-            <stop offset="1" stopColor="#f2a93b" />
+          <linearGradient id="beerGold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#ffd766" />
+            <stop offset=".48" stopColor="#e9a329" />
+            <stop offset="1" stopColor="#aa5a0d" />
           </linearGradient>
-          <radialGradient id="coreGlow">
-            <stop offset="0" stopColor="#baffc4" stopOpacity=".85" />
-            <stop offset=".45" stopColor="#66d17a" stopOpacity=".28" />
-            <stop offset="1" stopColor="#66d17a" stopOpacity="0" />
-          </radialGradient>
-          <filter id="machineGlow" x="-100%" y="-100%" width="300%" height="300%">
-            <feGaussianBlur stdDeviation="7" result="blur" />
+          <linearGradient id="iceBlue" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#e6fbff" />
+            <stop offset=".5" stopColor="#70d9ff" />
+            <stop offset="1" stopColor="#278bc4" />
+          </linearGradient>
+          <linearGradient id="steel" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#65757a" />
+            <stop offset=".45" stopColor="#eef8f5" />
+            <stop offset="1" stopColor="#56666b" />
+          </linearGradient>
+          <filter id="coldGlow" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
-          <path id="flowPath" d="M400 104 C575 104 696 238 696 400 C696 562 575 696 400 696 C225 696 104 562 104 400 C104 238 225 104 400 104 Z" />
+          <clipPath id="pintClip">
+            <path d="M294 326 H506 L482 648 Q478 684 442 690 H358 Q322 684 318 648 Z" />
+          </clipPath>
         </defs>
 
-        <circle className="machine-halo halo-a" cx="400" cy="400" r="345" />
-        <circle className="machine-halo halo-b" cx="400" cy="400" r="310" />
-        <circle className="core-glow" cx="400" cy="400" r="210" fill="url(#coreGlow)" />
-
-        <use href="#flowPath" className="flow-track" />
-        <use href="#flowPath" className="flow-energy" />
-
-        {[0,1,2,3,4].map((particle) => (
-          <circle key={particle} className="flow-particle" r={particle === 0 ? 8 : 5}>
-            <animateMotion dur="5.4s" begin={`-${particle * 1.08}s`} repeatCount="indefinite" rotate="auto">
-              <mpath href="#flowPath" />
-            </animateMotion>
-          </circle>
-        ))}
-
-        <g className="compressor-unit">
-          <circle cx="400" cy="126" r="61" className="unit-shell" />
-          <circle cx="400" cy="126" r="38" className="compressor-rotor" />
-          <path d="M400 92 L418 126 L400 160 L382 126 Z" className="rotor-blade" />
-          <circle cx="400" cy="126" r="7" className="unit-core" />
-        </g>
-
-        <g className="condenser-unit">
-          <rect x="614" y="326" width="116" height="148" rx="20" className="unit-shell" />
-          <path d="M640 350 H704 L640 375 H704 L640 400 H704 L640 425 H704 L640 450 H704" className="coil-hot" />
-          <path d="M740 357 l20 -12 M740 400 h26 M740 443 l20 12" className="heat-rays" />
-        </g>
-
-        <g className="evaporator-unit">
-          <rect x="70" y="326" width="116" height="148" rx="20" className="unit-shell" />
-          <path d="M96 350 H160 L96 375 H160 L96 400 H160 L96 425 H160 L96 450 H160" className="coil-cold" />
-          <g className="snow-crystal" transform="translate(128 400)">
-            <path d="M0 -35 V35 M-30 -17 L30 17 M-30 17 L30 -17" />
-            <path d="M0 -35 l-7 9 M0 -35 l7 9 M0 35 l-7 -9 M0 35 l7 -9" />
-          </g>
-        </g>
-
-        <g className="valve-unit">
-          <circle cx="400" cy="696" r="45" className="unit-shell" />
-          <path d="M375 676 L425 716 M425 676 L375 716" className="valve-cross" />
-          <path d="M381 656 H419" className="valve-cap" />
-        </g>
-
-        <g className="beer-scene" transform="translate(520 492)" filter="url(#machineGlow)">
-          <path className="beer-glass-outline" d="M4 4 H76 L68 112 Q66 130 50 134 H30 Q14 130 12 112 Z" />
-          <path className="beer-liquid" d="M13 46 H67 L62 111 Q61 120 50 123 H30 Q19 120 18 111 Z" />
-          <path className="beer-foam" d="M13 48 C17 35 29 40 34 31 C42 18 52 36 57 31 C66 23 72 37 67 49 Z" />
-          <path className="beer-handle" d="M73 30 H91 Q105 30 104 48 V83 Q104 101 86 101 H69" />
-          <g className="beer-bubbles">
-            <circle cx="28" cy="99" r="3" />
-            <circle cx="47" cy="106" r="2.5" />
-            <circle cx="56" cy="88" r="3.5" />
-            <circle cx="35" cy="78" r="2" />
-            <circle cx="52" cy="65" r="2.5" />
-          </g>
-          <g className="foam-dots">
-            <circle cx="22" cy="42" r="7" />
-            <circle cx="37" cy="34" r="9" />
-            <circle cx="53" cy="39" r="8" />
-            <circle cx="64" cy="43" r="6" />
-          </g>
-        </g>
-
-        <g className="energy-bolt" filter="url(#machineGlow)">
-          <path d="M438 250 L374 386 H422 L362 548 L485 362 H431 L490 250 Z" />
-        </g>
-
-        <g className="rf-core">
-          <circle cx="400" cy="400" r="112" />
-          <circle cx="400" cy="400" r="91" />
-          <text x="400" y="425" textAnchor="middle">RF</text>
-        </g>
-
-        <g className="spark-field">
-          {[[260,250],[544,250],[255,548],[548,548],[400,228],[400,574]].map(([x,y], index) => (
-            <circle key={index} cx={x} cy={y} r="4" style={{ animationDelay: `${index * .22}s` }} />
+        <g className="snow-field">
+          {snowflakes.map(([x,y,scale], index) => (
+            <g key={index} transform={`translate(${x} ${y}) scale(${scale})`} style={{ animationDelay: `-${index * .37}s` }}>
+              <path d="M0 -14 V14 M-12 -7 L12 7 M-12 7 L12 -7" />
+            </g>
           ))}
+        </g>
+
+        <g className="electric-feed electric-left" filter="url(#coldGlow)">
+          <path className="power-cable" d="M18 380 H140 C174 380 175 300 220 300 H275" />
+          <path className="electric-arc" d="M24 354 L64 384 L100 344 L139 382 L177 337 L218 373 L270 316" />
+          <circle cx="20" cy="380" r="12" />
+        </g>
+        <g className="electric-feed electric-right" filter="url(#coldGlow)">
+          <path className="power-cable" d="M782 380 H660 C626 380 625 300 580 300 H525" />
+          <path className="electric-arc" d="M776 354 L736 384 L700 344 L661 382 L623 337 L582 373 L530 316" />
+          <circle cx="780" cy="380" r="12" />
+        </g>
+
+        <g className="cooling-coil" filter="url(#coldGlow)">
+          <path d="M244 302 C214 330 214 366 244 394 C274 422 274 458 244 486 C214 514 214 550 254 578" />
+          <path d="M556 302 C586 330 586 366 556 394 C526 422 526 458 556 486 C586 514 586 550 546 578" />
+          <circle cx="244" cy="302" r="8" />
+          <circle cx="556" cy="302" r="8" />
+        </g>
+
+        <g className="draft-tower">
+          <path className="tower-body" d="M330 44 H470 V220 H430 V98 H370 V260 H330 Z" />
+          <rect className="tower-cap" x="315" y="32" width="170" height="40" rx="16" />
+          <path className="tap-body" d="M370 134 H548 V184 H478 V216 H430 V174 H370 Z" />
+          <rect className="tap-handle" x="494" y="72" width="34" height="94" rx="15" />
+          <circle className="tap-badge" cx="511" cy="86" r="29" />
+          <path className="tap-spout" d="M444 182 H494 V230 Q494 252 472 252 H446" />
+        </g>
+
+        <g className="beer-stream">
+          <path d="M467 249 C466 281 468 312 465 358" />
+          <circle cx="467" cy="274" r="5" />
+          <circle cx="467" cy="310" r="4" />
+        </g>
+
+        <g className="pint-glass">
+          <path className="glass-body" d="M294 326 H506 L482 648 Q478 684 442 690 H358 Q322 684 318 648 Z" />
+          <g clipPath="url(#pintClip)">
+            <rect className="beer-fill-large" x="292" y="354" width="216" height="340" fill="url(#beerGold)" />
+            <path className="beer-wave" d="M280 396 Q330 372 380 396 T480 396 T580 396 V440 H280 Z" />
+            <g className="beer-bubbles-large">
+              {[330,358,386,418,450,474].map((x,index) => <circle key={x} cx={x} cy={620-index*34} r={index%2 ? 5 : 8} style={{ animationDelay: `${index * .28}s` }} />)}
+            </g>
+          </g>
+          <g className="foam-head">
+            <circle cx="320" cy="368" r="29" />
+            <circle cx="354" cy="354" r="36" />
+            <circle cx="397" cy="360" r="42" />
+            <circle cx="442" cy="352" r="34" />
+            <circle cx="478" cy="370" r="28" />
+            <path d="M306 374 H490 V414 H306 Z" />
+          </g>
+          <path className="glass-shine" d="M330 350 L348 620" />
+          <text className="glass-rf" x="400" y="520" textAnchor="middle">RF</text>
+          <text className="glass-name" x="400" y="550" textAnchor="middle">RAFAEL FABIANI</text>
+        </g>
+
+        <g className="frost-layer">
+          <path d="M290 596 C314 573 332 607 351 584 C370 561 389 608 410 585 C431 562 453 604 475 580 C491 564 510 590 493 651 C486 688 462 711 421 714 H366 C326 708 301 681 297 648 Z" />
+          <path d="M305 610 l-34 18 35 8 -23 29 43 -5" />
+          <path d="M490 608 l38 17 -34 10 24 27 -40 -3" />
+        </g>
+
+        <g className="cold-fog">
+          <ellipse cx="400" cy="698" rx="270" ry="34" />
+          <ellipse cx="400" cy="690" rx="190" ry="24" />
+        </g>
+
+        <g className="big-bolts" filter="url(#coldGlow)">
+          <path d="M144 120 L94 224 H135 L88 326 L188 202 H148 L198 120 Z" />
+          <path d="M656 120 L706 224 H665 L712 326 L612 202 H652 L602 120 Z" />
         </g>
       </svg>
 
-      <div className="cinematic-copy">
-        <span>O SISTEMA ESTÁ PRONTO</span>
+      <div className="beer-intro-copy">
+        <span>FRIO • CERVEJA • ENERGIA</span>
         <h1>Coldtools</h1>
         <p>Idealizado por <strong>Rafael Fabiani</strong></p>
-        <button onClick={onEnter}><b>Iniciar</b><i>→</i></button>
+        <button onClick={onEnter}><b>Entrar nas ferramentas</b><i>→</i></button>
       </div>
     </main>
   );
