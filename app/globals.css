@@ -205,3 +205,20 @@ main { grid-column: 2; min-width: 0; }
 .pressure-ruler small { color: var(--muted); }
 .pressure-ruler small:last-child { text-align: right; }
 .pressure-ruler strong { color: var(--amber); font-size: 18px; }
+
+
+.field .sign-toggle { width: 44px; height: 100%; flex: 0 0 44px; border: 0; border-right: 1px solid var(--line); background: rgba(255,255,255,.035); color: var(--muted); cursor: pointer; font-size: 18px; font-weight: 850; }
+.field .sign-toggle.negative { color: var(--amber); background: rgba(242,169,59,.08); }
+.field .sign-toggle:hover { color: var(--text); }
+
+.shape-picker { margin: 24px 0; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.shape-picker button { min-height: 142px; border: 1px solid var(--line); border-radius: 13px; background: rgba(10,14,16,.28); color: var(--muted); display: grid; place-items: center; align-content: center; gap: 7px; padding: 14px; cursor: pointer; }
+.shape-picker button:hover { color: var(--text); border-color: var(--green); }
+.shape-picker button.active { color: var(--green); border-color: var(--green); background: rgba(102,209,122,.07); box-shadow: inset 0 0 0 1px rgba(102,209,122,.14); }
+.shape-picker svg { width: 86px; height: 62px; }
+.shape-picker span { font-size: 12px; font-weight: 750; text-align: center; }
+
+@media (max-width: 720px) {
+  .shape-picker { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .shape-picker button { min-height: 125px; }
+}
