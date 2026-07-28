@@ -26,7 +26,7 @@ const tools: Tool[] = [
   { id: "solucoes-anticongelantes", title: "Soluções anticongelantes", description: "Proporção, congelamento e densidade da solução.", category: "Refrigeração", icon: "◒", accent: "amber" },
   { id: "congelamento-cerveja", title: "Congelamento da cerveja", description: "Estime o início do congelamento por estilo, álcool e densidade.", category: "Refrigeração", icon: "◐", accent: "amber" },
   { id: "orvalho", title: "Ponto de orvalho", description: "Temperatura, umidade e condensação.", category: "Refrigeração", icon: "◌", accent: "amber" },
-  { id: "carga-termica", title: "Carga térmica / vazão", description: "Relação Q = m · c · ΔT.", category: "Refrigeração", icon: "⌂", accent: "amber" },
+  { id: "carga-termica", title: "Carga térmica / vazão", description: "Carga e vazão com densidade e calor específico do líquido.", category: "Refrigeração", icon: "⌂", accent: "amber" },
   { id: "orificio", title: "Cálculo de orifício", description: "Seleção para válvula de expansão.", category: "Refrigeração", icon: "◎", accent: "amber" },
   { id: "selecao-vazao", title: "Cálculo de vazão", description: "Vazão de ar ou de líquido.", category: "Vazão", icon: "≋" },
   { id: "geometria-area", title: "Cálculo de área", description: "Área de círculos, retângulos, triângulos e outras formas.", category: "Geometria", icon: "▱" },
@@ -328,6 +328,75 @@ function fmt(value: number, digits = 2) {
   return Number.isFinite(value)
     ? value.toLocaleString("pt-BR", { maximumFractionDigits: digits })
     : "—";
+}
+
+type ThermalLiquid = "Água" | "Água + 5% de etanol" | "Cerveja / chope (5% ABV)" | "Personalizado";
+type PropertyPoint = [temperature: number, value: number];
+
+function interpolateProperty(points: PropertyPoint[], temperature: number) {
+  const safeTemperature = Math.min(points[points.length - 1][0], Math.max(points[0][0], temperature));
+  const upperIndex = points.findIndex(([pointTemperature]) => pointTemperature >= safeTemperature);
+  if (upperIndex <= 0) return points[0][1];
+  const [lowerTemperature, lowerValue] = points[upperIndex - 1];
+  const [upperTemperature, upperValue] = points[upperIndex];
+  const ratio = (safeTemperature - lowerTemperature) / (upperTemperature - lowerTemperature);
+  return lowerValue + (upperValue - lowerValue) * ratio;
+}
+
+const waterCpKjKgK: PropertyPoint[] = [
+  [-10, 4.272], [0, 4.218], [10, 4.192], [20, 4.182], [30, 4.178],
+  [40, 4.179], [60, 4.185], [80, 4.197], [100, 4.216],
+];
+
+const ethanolCpKjKgK: PropertyPoint[] = [
+  [-10, 2.22], [0, 2.30], [10, 2.37], [20, 2.43], [25, 2.46],
+  [40, 2.57], [60, 2.72], [80, 2.90],
+];
+
+const ethanolDensityKgL: PropertyPoint[] = [
+  [-10, .818], [0, .806], [10, .798], [20, .789], [25, .785],
+  [40, .772], [60, .754], [80, .735],
+];
+
+function waterDensityKgL(temperature: number) {
+  const safeTemperature = Math.min(100, Math.max(0, temperature));
+  return 1 - ((safeTemperature + 288.9414) / (508929.2 * (safeTemperature + 68.12963)))
+    * Math.pow(safeTemperature - 3.9863, 2);
+}
+
+function thermalLiquidProperties(liquid: ThermalLiquid, temperature: number, customDensity: number, customCp: number) {
+  const waterDensity = waterDensityKgL(temperature);
+  const waterCp = interpolateProperty(waterCpKjKgK, temperature);
+
+  if (liquid === "Água") return { density: waterDensity, cpKj: waterCp, basis: "Água líquida" };
+
+  if (liquid === "Água + 5% de etanol") {
+    const ethanolDensity = interpolateProperty(ethanolDensityKgL, temperature);
+    const ethanolCp = interpolateProperty(ethanolCpKjKgK, temperature);
+    const waterMass = .95 * waterDensity;
+    const ethanolMass = .05 * ethanolDensity;
+    const mixtureMass = waterMass + ethanolMass;
+    return {
+      density: mixtureMass,
+      cpKj: (waterMass * waterCp + ethanolMass * ethanolCp) / mixtureMass,
+      basis: "5% de etanol em volume (v/v)",
+    };
+  }
+
+  if (liquid === "Cerveja / chope (5% ABV)") {
+    const alcoholFractionByMass = .04;
+    const residualExtractFraction = .03;
+    const waterFraction = 1 - alcoholFractionByMass - residualExtractFraction;
+    const ethanolCp = interpolateProperty(ethanolCpKjKgK, temperature);
+    const extractCp = 1.25;
+    return {
+      density: 1.01 - .0003 * (temperature - 20),
+      cpKj: waterFraction * waterCp + alcoholFractionByMass * ethanolCp + residualExtractFraction * extractCp,
+      basis: "Estimativa: 5% ABV e 3 °P de extrato residual",
+    };
+  }
+
+  return { density: customDensity, cpKj: customCp, basis: "Propriedades informadas pelo usuário" };
 }
 
 function ToolWorkspace({
@@ -1507,22 +1576,65 @@ function BeerFreezingPoint() {
 
 function ThermalLoad() {
   const [mode, setMode] = useState("Carga térmica");
-  const [liquid, setLiquid] = useState("Água");
+  const [liquid, setLiquid] = useState<ThermalLiquid>("Água");
   const [tin, setTin] = useState("");
   const [tout, setTout] = useState("");
   const [known, setKnown] = useState("");
+  const [customDensity, setCustomDensity] = useState("1");
+  const [customCp, setCustomCp] = useState("4,18");
   const delta = Math.abs(n(tout) - n(tin));
-  const cp = liquid === "Água" ? 1 : .95;
-  const result = mode === "Carga térmica" ? n(known) * cp * delta : n(known) / Math.max(cp * delta, .0001);
+  const averageTemperature = (n(tin) + n(tout)) / 2;
+  const properties = thermalLiquidProperties(liquid, averageTemperature, n(customDensity), n(customCp));
+  const cpKcal = properties.cpKj / 4.184;
+  const volumetricHeatCapacity = properties.density * cpKcal;
+  const complete = tin.trim() !== "" && tout.trim() !== "" && known.trim() !== ""
+    && delta > 0 && n(known) > 0 && properties.density > 0 && properties.cpKj > 0;
+  const thermalLoad = mode === "Carga térmica"
+    ? n(known) * volumetricHeatCapacity * delta
+    : n(known);
+  const volumeFlow = mode === "Carga térmica"
+    ? n(known)
+    : n(known) / Math.max(volumetricHeatCapacity * delta, .0001);
+  const massFlow = volumeFlow * properties.density;
+  const belowPropertyRange = averageTemperature < -10 || averageTemperature > 80;
+  const pureWaterBelowFreezing = liquid === "Água" && Math.min(n(tin), n(tout)) < 0;
+
   return (
-    <Calculator result={result > 0 ? <><ResultLine label={mode} value={fmt(result)} unit={mode === "Carga térmica" ? "kcal/h" : "L/h"} /><ResultLine label="ΔT" value={fmt(delta, 1)} unit="°C" /><ResultLine label="Calor específico adotado" value={fmt(cp, 2)} unit="kcal/kg°C" /></> : undefined} note="Para estimativa de água ou cerveja com densidade aproximada de 1 kg/L.">
-      <h2>Q = m · c · ΔT</h2>
+    <Calculator
+      result={complete ? <>
+        <div className="result-badge">{fmt(mode === "Carga térmica" ? thermalLoad : volumeFlow)} {mode === "Carga térmica" ? "kcal/h" : "L/h"}</div>
+        <ResultLine label={mode} value={fmt(mode === "Carga térmica" ? thermalLoad : volumeFlow)} unit={mode === "Carga térmica" ? "kcal/h" : "L/h"} />
+        {mode === "Carga térmica" && <ResultLine label="Potência térmica" value={fmt(thermalLoad / 860.42065, 3)} unit="kW" />}
+        {mode === "Carga térmica" && <ResultLine label="Capacidade" value={fmt(thermalLoad * 3.96832)} unit="BTU/h" />}
+        {mode === "Carga térmica" && <ResultLine label="Toneladas de refrigeração" value={fmt(thermalLoad / 3023.95, 3)} unit="TR" />}
+        <ResultLine label="Vazão mássica" value={fmt(massFlow)} unit="kg/h" />
+        <ResultLine label="ΔT" value={fmt(delta, 1)} unit="°C" />
+        <ResultLine label="Densidade adotada" value={fmt(properties.density, 4)} unit="kg/L" />
+        <ResultLine label="Calor específico" value={fmt(properties.cpKj, 3)} unit="kJ/kg·K" />
+        <ResultLine label="Calor específico" value={fmt(cpKcal, 4)} unit="kcal/kg·°C" />
+        <ResultLine label="Capacidade térmica volumétrica" value={fmt(volumetricHeatCapacity, 4)} unit="kcal/L·°C" />
+      </> : undefined}
+      note={pureWaterBelowFreezing
+        ? "Atenção: água pura abaixo de 0 °C tende a congelar; use uma solução anticongelante adequada. As propriedades exibidas são estimativas de engenharia."
+        : belowPropertyRange
+          ? "A temperatura média está fora da faixa principal dos dados (−10 a 80 °C); o cálculo usa o valor limite mais próximo."
+          : "A densidade e o calor específico são estimados na temperatura média do processo. Cervejas variam conforme álcool, extrato e receita."}
+    >
+      <h2>Q = V̇ · ρ · cₚ · ΔT</h2>
+      <p className="calc-intro">O cálculo converte a vazão volumétrica em vazão mássica e ajusta as propriedades pela temperatura média do líquido.</p>
+      <div className="conditions">
+        <span>Propriedades a {fmt(averageTemperature, 1)} °C</span>
+        <span>{properties.basis}</span>
+        <span>Densidade incluída no cálculo</span>
+      </div>
       <div className="form-grid">
         <SelectField label="O que deseja calcular" value={mode} onChange={setMode} options={["Carga térmica","Vazão"]} />
-        <SelectField label="Líquido" value={liquid} onChange={setLiquid} options={["Água","Cerveja"]} />
-        <Field label="Temperatura de entrada" unit="°C" value={tin} onChange={setTin} />
-        <Field label="Temperatura de saída" unit="°C" value={tout} onChange={setTout} />
+        <SelectField label="Líquido" value={liquid} onChange={(value) => setLiquid(value as ThermalLiquid)} options={["Água","Água + 5% de etanol","Cerveja / chope (5% ABV)","Personalizado"]} />
+        <Field label="Temperatura de entrada" unit="°C" value={tin} onChange={setTin} allowNegative />
+        <Field label="Temperatura de saída" unit="°C" value={tout} onChange={setTout} allowNegative />
         <Field label={mode === "Carga térmica" ? "Vazão" : "Carga térmica"} unit={mode === "Carga térmica" ? "L/h" : "kcal/h"} value={known} onChange={setKnown} />
+        {liquid === "Personalizado" && <Field label="Densidade" unit="kg/L" value={customDensity} onChange={setCustomDensity} />}
+        {liquid === "Personalizado" && <Field label="Calor específico" unit="kJ/kg·K" value={customCp} onChange={setCustomCp} />}
       </div>
     </Calculator>
   );
