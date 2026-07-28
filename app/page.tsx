@@ -52,27 +52,27 @@ function RFLogoIcon({
   return (
     <svg
       className={`rf-logo ${className}`}
-      viewBox="0 0 120 120"
-      x={engraving ? 318 : undefined}
-      y={engraving ? 414 : undefined}
-      width={engraving ? 164 : undefined}
-      height={engraving ? 164 : undefined}
+      viewBox="0 0 128 128"
+      x={engraving ? 327 : undefined}
+      y={engraving ? 416 : undefined}
+      width={engraving ? 146 : undefined}
+      height={engraving ? 146 : undefined}
       role={title ? "img" : undefined}
       aria-hidden={title ? undefined : true}
       aria-label={title}
     >
-      <path className="logo-part logo-outline logo-mug-body" d="M18 29 H88 Q95 29 95 36 V91 Q95 100 86 100 H28 Q18 100 18 90 Z" />
-      <path className="logo-part logo-outline logo-mug-handle" d="M95 42 H102 Q111 42 111 51 V76 Q111 85 102 85 H95" />
-      <path className="logo-part logo-outline logo-letter logo-letter-r" d="M32 46 V82 M32 46 H47 Q56 46 56 55 Q56 64 47 64 H32 M46 64 L58 82" />
-      <path className="logo-part logo-outline logo-letter logo-letter-f" d="M70 46 V82 M70 46 H89 M70 63 H85" />
-      <path className="logo-part logo-solid logo-beer logo-beer-left" d="M24 82 Q38 85 55 83 L51 94 H29 Q24 94 24 89 Z" />
-      <path className="logo-part logo-solid logo-beer logo-beer-right" d="M65 83 Q78 85 89 82 V89 Q89 94 84 94 H61 Z" />
-      <path className="logo-part logo-solid logo-bolt" d="M63 27 L50 61 H60 L53 96 L76 55 H65 L76 27 Z" />
+      <path className="logo-part logo-outline logo-mug-body" d="M15 31 H91 Q97 31 97 37 V99 Q97 108 88 108 H25 Q15 108 15 98 Z" />
+      <path className="logo-part logo-outline logo-mug-handle" d="M97 45 H106 Q117 45 117 56 V82 Q117 93 106 93 H97" />
+      <path className="logo-part logo-solid logo-letter logo-letter-r" fillRule="evenodd" d="M29 48 H47 Q61 48 61 61 Q61 70 53 74 L64 91 H52 L43 77 H40 V91 H29 Z M40 58 V68 H47 Q51 68 51 63 Q51 58 47 58 Z" />
+      <path className="logo-part logo-solid logo-letter logo-letter-f" d="M72 48 H95 V58 H83 V66 H93 V76 H83 V91 H72 Z" />
+      <path className="logo-part logo-solid logo-beer logo-beer-left" d="M22 93 Q38 97 56 94 L53 102 H27 Q22 102 22 97 Z" />
+      <path className="logo-part logo-solid logo-beer logo-beer-right" d="M68 94 Q81 97 90 93 V97 Q90 102 85 102 H65 Z" />
+      <path className="logo-part logo-solid logo-bolt" d="M66 28 L53 63 H63 L56 99 L79 56 H68 L79 28 Z" />
       <g className="logo-part logo-outline logo-snow">
-        <path d="M63 5 V27 M53.5 10.5 L72.5 21.5 M53.5 21.5 L72.5 10.5" />
-        <path d="M63 5 L59.5 9 M63 5 L66.5 9 M63 27 L59.5 23 M63 27 L66.5 23" />
-        <path d="M53.5 10.5 L58.5 10 M53.5 10.5 L55.5 15 M72.5 21.5 L67.5 22 M72.5 21.5 L70.5 17" />
-        <path d="M53.5 21.5 L55.5 17 M53.5 21.5 L58.5 22 M72.5 10.5 L67.5 10 M72.5 10.5 L70.5 15" />
+        <path d="M66 7 V27 M57.3 12 L74.7 22 M57.3 22 L74.7 12" />
+        <path d="M66 7 L62.8 10.7 M66 7 L69.2 10.7 M66 27 L62.8 23.3 M66 27 L69.2 23.3" />
+        <path d="M57.3 12 L61.8 11.7 M57.3 12 L59 16.1 M74.7 22 L70.2 22.3 M74.7 22 L73 17.9" />
+        <path d="M57.3 22 L59 17.9 M57.3 22 L61.8 22.3 M74.7 12 L70.2 11.7 M74.7 12 L73 16.1" />
       </g>
     </svg>
   );
@@ -180,7 +180,7 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
           <g className="laser-engraving" filter="url(#coldGlow)">
             <RFLogoIcon className="rf-logo-laser" engraving />
             <g className="laser-scanner">
-              <line x1="318" y1="0" x2="482" y2="0" />
+              <line x1="327" y1="0" x2="473" y2="0" />
               <circle cx="400" cy="0" r="6" />
               <circle className="laser-spark spark-one" cx="382" cy="-3" r="3" />
               <circle className="laser-spark spark-two" cx="418" cy="4" r="2.5" />
