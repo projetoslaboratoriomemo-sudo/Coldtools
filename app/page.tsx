@@ -140,19 +140,9 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
           <path className="glass-shine" d="M302 350 L318 620" />
           <path className="mug-base" d="M294 650 H488 Q484 684 456 686 H326 Q298 682 294 650 Z" />
           <g className="laser-engraving" filter="url(#coldGlow)">
-            <text className="laser-rf-letters" y="520">
-              <tspan className="laser-letter rf-letter" x="365" style={{ animationDelay: "4.7s" }}>R</tspan>
-              <tspan className="laser-letter rf-letter" x="408" style={{ animationDelay: "5.15s" }}>F</tspan>
-            </text>
-            <text className="laser-name-letters" y="550">
-              {"RAFAEL FABIANI".split("").map((letter, index) => (
-                <tspan
-                  key={`${letter}-${index}`}
-                  className="laser-letter name-letter"
-                  x={322 + index * 12}
-                  style={{ animationDelay: `${5.7 + index * .24}s` }}
-                >{letter}</tspan>
-              ))}
+            <text className="laser-rf-letters" y="545">
+              <tspan className="laser-letter rf-letter" x="342" style={{ animationDelay: "4.7s" }}>R</tspan>
+              <tspan className="laser-letter rf-letter" x="408" style={{ animationDelay: "5.35s" }}>F</tspan>
             </text>
             <g className="laser-scanner">
               <line x1="306" y1="0" x2="494" y2="0" />
