@@ -139,8 +139,19 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
           </g>
           <path className="glass-shine" d="M302 350 L318 620" />
           <path className="mug-base" d="M294 650 H488 Q484 684 456 686 H326 Q298 682 294 650 Z" />
-          <text className="glass-rf" x="400" y="520" textAnchor="middle">RF</text>
-          <text className="glass-name" x="400" y="550" textAnchor="middle">RAFAEL FABIANI</text>
+          <g className="laser-engraving" filter="url(#coldGlow)">
+            <text className="laser-outline laser-rf" x="400" y="520" textAnchor="middle">RF</text>
+            <text className="laser-outline laser-name" x="400" y="550" textAnchor="middle">RAFAEL FABIANI</text>
+            <text className="laser-final laser-rf" x="400" y="520" textAnchor="middle">RF</text>
+            <text className="laser-final laser-name" x="400" y="550" textAnchor="middle">RAFAEL FABIANI</text>
+            <g className="laser-scanner">
+              <line x1="314" y1="0" x2="486" y2="0" />
+              <circle cx="400" cy="0" r="6" />
+              <circle className="laser-spark spark-one" cx="382" cy="-3" r="3" />
+              <circle className="laser-spark spark-two" cx="418" cy="4" r="2.5" />
+              <circle className="laser-spark spark-three" cx="399" cy="-9" r="2" />
+            </g>
+          </g>
         </g>
 
         <g className="frost-layer">
