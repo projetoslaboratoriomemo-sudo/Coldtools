@@ -40,6 +40,44 @@ const nav: { label: Category; icon: string }[] = [
   { label: "Geometria", icon: "◇" },
 ];
 
+function RFLogoIcon({
+  className = "",
+  engraving = false,
+  title,
+}: {
+  className?: string;
+  engraving?: boolean;
+  title?: string;
+}) {
+  return (
+    <svg
+      className={`rf-logo ${className}`}
+      viewBox="0 0 120 120"
+      x={engraving ? 318 : undefined}
+      y={engraving ? 414 : undefined}
+      width={engraving ? 164 : undefined}
+      height={engraving ? 164 : undefined}
+      role={title ? "img" : undefined}
+      aria-hidden={title ? undefined : true}
+      aria-label={title}
+    >
+      <path className="logo-part logo-outline logo-mug-body" d="M18 29 H88 Q95 29 95 36 V91 Q95 100 86 100 H28 Q18 100 18 90 Z" />
+      <path className="logo-part logo-outline logo-mug-handle" d="M95 42 H102 Q111 42 111 51 V76 Q111 85 102 85 H95" />
+      <path className="logo-part logo-outline logo-letter logo-letter-r" d="M32 46 V82 M32 46 H47 Q56 46 56 55 Q56 64 47 64 H32 M46 64 L58 82" />
+      <path className="logo-part logo-outline logo-letter logo-letter-f" d="M70 46 V82 M70 46 H89 M70 63 H85" />
+      <path className="logo-part logo-solid logo-beer logo-beer-left" d="M24 82 Q38 85 55 83 L51 94 H29 Q24 94 24 89 Z" />
+      <path className="logo-part logo-solid logo-beer logo-beer-right" d="M65 83 Q78 85 89 82 V89 Q89 94 84 94 H61 Z" />
+      <path className="logo-part logo-solid logo-bolt" d="M63 27 L50 61 H60 L53 96 L76 55 H65 L76 27 Z" />
+      <g className="logo-part logo-outline logo-snow">
+        <path d="M63 5 V27 M53.5 10.5 L72.5 21.5 M53.5 21.5 L72.5 10.5" />
+        <path d="M63 5 L59.5 9 M63 5 L66.5 9 M63 27 L59.5 23 M63 27 L66.5 23" />
+        <path d="M53.5 10.5 L58.5 10 M53.5 10.5 L55.5 15 M72.5 21.5 L67.5 22 M72.5 21.5 L70.5 17" />
+        <path d="M53.5 21.5 L55.5 17 M53.5 21.5 L58.5 22 M72.5 10.5 L67.5 10 M72.5 10.5 L70.5 15" />
+      </g>
+    </svg>
+  );
+}
+
 function IntroScreen({ onEnter }: { onEnter: () => void }) {
   const snowflakes = [
     [82,118,1.1],[154,214,.8],[696,126,1],[635,242,.7],[92,498,.8],[716,530,1.1],
@@ -140,12 +178,9 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
           <path className="glass-shine" d="M302 350 L318 620" />
           <path className="mug-base" d="M294 650 H488 Q484 684 456 686 H326 Q298 682 294 650 Z" />
           <g className="laser-engraving" filter="url(#coldGlow)">
-            <text className="laser-rf-letters" y="545">
-              <tspan className="laser-letter rf-letter" x="342" style={{ animationDelay: "4.7s" }}>R</tspan>
-              <tspan className="laser-letter rf-letter" x="408" style={{ animationDelay: "5.35s" }}>F</tspan>
-            </text>
+            <RFLogoIcon className="rf-logo-laser" engraving />
             <g className="laser-scanner">
-              <line x1="306" y1="0" x2="494" y2="0" />
+              <line x1="318" y1="0" x2="482" y2="0" />
               <circle cx="400" cy="0" r="6" />
               <circle className="laser-spark spark-one" cx="382" cy="-3" r="3" />
               <circle className="laser-spark spark-two" cx="418" cy="4" r="2.5" />
@@ -238,7 +273,12 @@ export default function Home() {
       <main>
         <header className="topbar">
           <div className="status"><i /> Sistema operacional <b>Tudo em ordem</b></div>
-          <div className="top-actions"><span>Modo offline disponível</span><button aria-label="Perfil do técnico">RF</button></div>
+          <div className="top-actions">
+            <span>Modo offline disponível</span>
+            <button className="profile-logo" aria-label="Identidade Rafael Fabiani">
+              <RFLogoIcon title="RF — Rafael Fabiani" />
+            </button>
+          </div>
         </header>
 
         <section className="workspace">
