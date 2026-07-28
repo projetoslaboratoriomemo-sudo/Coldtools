@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Category = "Início" | "Elétrica" | "Refrigeração" | "Vazão" | "Geometria";
 
@@ -21,6 +21,7 @@ const tools: Tool[] = [
   { id: "conversor", title: "Conversor de refrigeração", description: "kW, kcal/h, BTU/h e TR.", category: "Refrigeração", icon: "❄", accent: "amber" },
   { id: "saturacao", title: "Régua de saturação", description: "Pressão em psig × temperatura do refrigerante.", category: "Refrigeração", icon: "↔", accent: "amber" },
   { id: "diagnostico-termico", title: "Superaquecimento e sub-resfriamento", description: "Calcule superaquecimento útil, total e sub-resfriamento.", category: "Refrigeração", icon: "∆", accent: "amber" },
+  { id: "ciclo-frigorifico", title: "Ciclo frigorífico e gráfico P-h", description: "Entalpias, capacidade, COP e diagrama completo do sistema.", category: "Refrigeração", icon: "ℎ", accent: "amber" },
   { id: "trocadores-calor", title: "Evaporadores e condensadores", description: "Volume interno, áreas de troca e estimativa de líquido e vapor.", category: "Refrigeração", icon: "▦", accent: "amber" },
   { id: "solucoes-anticongelantes", title: "Soluções anticongelantes", description: "Proporção, congelamento e densidade da solução.", category: "Refrigeração", icon: "◒", accent: "amber" },
   { id: "congelamento-cerveja", title: "Congelamento da cerveja", description: "Estime o início do congelamento por estilo, álcool e densidade.", category: "Refrigeração", icon: "◐", accent: "amber" },
@@ -344,6 +345,7 @@ function ToolWorkspace({
     conversor: <RefrigerationConverter />,
     saturacao: <SaturationRuler />,
     "diagnostico-termico": <ThermalDiagnostics />,
+    "ciclo-frigorifico": <RefrigerationCycle />,
     "trocadores-calor": <FinnedCoilCalculator />,
     "solucoes-anticongelantes": <AntifreezeMixture />,
     "congelamento-cerveja": <BeerFreezingPoint />,
@@ -795,6 +797,353 @@ function ThermalDiagnostics() {
       </div>
       <button className="secondary" onClick={() => setValues({ lowPressure: "", highPressure: "", evaporatorOutlet: "", suction: "", condenserOutlet: "" })}>Limpar medições</button>
     </Calculator>
+  );
+}
+
+type CyclePoint = {
+  id: string;
+  label: string;
+  pressureBar: number;
+  enthalpy: number;
+  temperature: number;
+};
+
+type CycleResponse = {
+  fluid: Refrigerant;
+  pressures: {
+    lowPsig: number;
+    highPsig: number;
+    lowBarAbsolute: number;
+    highBarAbsolute: number;
+    ratio: number;
+  };
+  temperatures: {
+    evaporatingDew: number;
+    evaporatingBubble: number;
+    condensingDew: number;
+    condensingBubble: number;
+    suction: number;
+    discharge: number;
+    liquidLine: number;
+  };
+  points: CyclePoint[];
+  idealDischarge: { enthalpy: number; temperature: number };
+  properties: {
+    qualityAtEvaporatorInlet: number | null;
+    specificVolume: number;
+    suctionDensity: number;
+    suctionEntropy: number;
+    refrigerationEffect: number;
+    compressorWorkIdeal: number;
+    compressorWork: number;
+    condenserHeat: number;
+    cop: number;
+    copIdeal: number;
+    eer: number;
+  };
+  compressor: {
+    hasEstimate: boolean;
+    rpm: number;
+    displacement: number;
+    volumetricEfficiency: number;
+    isentropicEfficiency: number;
+    theoreticalFlowM3H: number;
+    suctionFlowM3H: number;
+    massFlowKgH: number | null;
+    evaporatorCapacityKw: number | null;
+    compressorPowerKw: number | null;
+    condenserCapacityKw: number | null;
+  };
+  dome: Array<{ liquidH: number; vaporH: number; pressureBar: number }>;
+};
+
+function RefrigerationCycle() {
+  const [fluid, setFluid] = useState<Refrigerant>("R134a");
+  const [rotationMode, setRotationMode] = useState("Frequência e polos");
+  const [values, setValues] = useState<Values>({
+    lowPressure: "27,8",
+    highPressure: "153,5",
+    superheat: "7,4",
+    subcooling: "6,2",
+    displacement: "11,14",
+    frequency: "60",
+    poles: "2",
+    rpm: "3600",
+    volumetricEfficiency: "70",
+    isentropicEfficiency: "65",
+  });
+  const [cycle, setCycle] = useState<CycleResponse | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState("");
+
+  const change = (key: string) => (value: string) =>
+    setValues((old) => ({ ...old, [key]: value }));
+  const calculatedRpm = rotationMode === "RPM manual"
+    ? n(values.rpm)
+    : (120 * n(values.frequency)) / Math.max(1, n(values.poles));
+
+  useEffect(() => {
+    const required = [
+      values.lowPressure,
+      values.highPressure,
+      values.superheat,
+      values.subcooling,
+    ];
+    if (!required.every((value) => value.trim() !== "" && Number.isFinite(n(value)))) {
+      setCycle(null);
+      setStatus("error");
+      setError("Preencha os quatro dados de operação para calcular o ciclo.");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setStatus("loading");
+      setError("");
+      try {
+        const response = await fetch("/api/cycle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            fluid,
+            lowPressure: n(values.lowPressure),
+            highPressure: n(values.highPressure),
+            superheat: n(values.superheat),
+            subcooling: n(values.subcooling),
+            displacement: n(values.displacement),
+            rpm: calculatedRpm,
+            volumetricEfficiency: n(values.volumetricEfficiency),
+            isentropicEfficiency: n(values.isentropicEfficiency),
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Não foi possível calcular este ciclo.");
+        setCycle(data);
+        setStatus("ready");
+      } catch (requestError) {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        setCycle(null);
+        setStatus("error");
+        setError(requestError instanceof Error ? requestError.message : "Falha no cálculo.");
+      }
+    }, 420);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [calculatedRpm, fluid, values]);
+
+  const result = status === "loading" ? (
+    <div className="result-badge warning">Calculando propriedades…</div>
+  ) : status === "error" ? (
+    <div className="cycle-error">{error}</div>
+  ) : cycle ? (
+    <>
+      <div className="result-badge">
+        {cycle.compressor.hasEstimate
+          ? `${fmt(cycle.compressor.evaporatorCapacityKw ?? 0, 3)} kW no evaporador`
+          : `${fmt(cycle.properties.refrigerationEffect, 2)} kJ/kg`}
+      </div>
+      <ResultLine label="Efeito frigorífico" value={fmt(cycle.properties.refrigerationEffect, 2)} unit="kJ/kg" />
+      <ResultLine label="Trabalho do compressor" value={fmt(cycle.properties.compressorWork, 2)} unit="kJ/kg" />
+      <ResultLine label="Calor no condensador" value={fmt(cycle.properties.condenserHeat, 2)} unit="kJ/kg" />
+      <ResultLine label="COP ideal" value={fmt(cycle.properties.copIdeal, 3)} />
+      <ResultLine label="COP estimado" value={fmt(cycle.properties.cop, 3)} />
+      <ResultLine label="EER estimado" value={fmt(cycle.properties.eer, 2)} unit="BTU/Wh" />
+      {cycle.compressor.hasEstimate && <>
+        <ResultLine label="Vazão de refrigerante" value={fmt(cycle.compressor.massFlowKgH ?? 0, 2)} unit="kg/h" />
+        <ResultLine label="Capacidade do evaporador" value={fmt(cycle.compressor.evaporatorCapacityKw ?? 0, 3)} unit="kW" />
+        <ResultLine label="Capacidade em kcal/h" value={fmt((cycle.compressor.evaporatorCapacityKw ?? 0) * 859.845)} unit="kcal/h" />
+        <ResultLine label="Capacidade em BTU/h" value={fmt((cycle.compressor.evaporatorCapacityKw ?? 0) * 3412.142)} unit="BTU/h" />
+        <ResultLine label="Capacidade em TR" value={fmt((cycle.compressor.evaporatorCapacityKw ?? 0) / 3.516853, 3)} unit="TR" />
+        <ResultLine label="Potência do compressor" value={fmt(cycle.compressor.compressorPowerKw ?? 0, 3)} unit="kW" />
+        <ResultLine label="Capacidade do condensador" value={fmt(cycle.compressor.condenserCapacityKw ?? 0, 3)} unit="kW" />
+      </>}
+    </>
+  ) : undefined;
+
+  return (
+    <>
+      <Calculator
+        result={result}
+        note="As propriedades são calculadas por equações de estado do CoolProp. A capacidade baseada no deslocamento é uma estimativa; mapas do fabricante continuam sendo a referência para seleção final."
+      >
+        <h2>Ciclo de compressão de vapor</h2>
+        <p className="calc-intro">Informe as condições medidas. O deslocamento é opcional: sem ele, o sistema calcula normalmente todas as propriedades por kg de refrigerante.</p>
+
+        <h3>1. Condições de operação</h3>
+        <div className="form-grid">
+          <SelectField label="Fluido refrigerante" value={fluid} onChange={(value) => setFluid(value as Refrigerant)} options={Object.keys(refrigerantPressureTable)} />
+          <Field label="Pressão de baixa" unit="psig" value={values.lowPressure} onChange={change("lowPressure")} allowNegative />
+          <Field label="Pressão de alta" unit="psig" value={values.highPressure} onChange={change("highPressure")} allowNegative />
+          <Field label="Superaquecimento total" unit="K" value={values.superheat} onChange={change("superheat")} />
+          <Field label="Sub-resfriamento" unit="K" value={values.subcooling} onChange={change("subcooling")} />
+        </div>
+
+        <h3>2. Compressor</h3>
+        <p className="calc-intro">Se você não tiver as eficiências, mantenha os valores sugeridos e interprete a capacidade como estimativa.</p>
+        <div className="form-grid">
+          <Field label="Deslocamento do compressor" unit="cm³/rev" value={values.displacement} onChange={change("displacement")} />
+          <SelectField label="Definir rotação por" value={rotationMode} onChange={setRotationMode} options={["Frequência e polos", "RPM manual"]} />
+          {rotationMode === "Frequência e polos" ? <>
+            <SelectField label="Frequência" value={values.frequency} onChange={change("frequency")} options={["50", "60"]} />
+            <SelectField label="Número de polos" value={values.poles} onChange={change("poles")} options={["2", "4", "6"]} />
+          </> : (
+            <Field label="Rotação informada" unit="RPM" value={values.rpm} onChange={change("rpm")} />
+          )}
+          <Field label="Eficiência volumétrica estimada" unit="%" value={values.volumetricEfficiency} onChange={change("volumetricEfficiency")} />
+          <Field label="Eficiência isentrópica estimada" unit="%" value={values.isentropicEfficiency} onChange={change("isentropicEfficiency")} />
+        </div>
+        <div className="conditions">
+          <span>Rotação usada: {fmt(calculatedRpm, 0)} RPM</span>
+          <span>Pressões informadas em psig</span>
+          <span>Entalpias em kJ/kg</span>
+        </div>
+      </Calculator>
+
+      {cycle && status === "ready" && (
+        <section className="cycle-report">
+          <div className="cycle-report-head">
+            <div>
+              <span>DIAGRAMA TERMODINÂMICO</span>
+              <h2>Gráfico pressão × entalpia</h2>
+              <p>O traçado mostra o ciclo calculado e a região de saturação do {cycle.fluid}.</p>
+            </div>
+            <div className="cycle-kpis">
+              <span><small>Evaporação</small><strong>{fmt(cycle.temperatures.evaporatingDew, 1)} °C</strong></span>
+              <span><small>Condensação</small><strong>{fmt(cycle.temperatures.condensingBubble, 1)} °C</strong></span>
+              <span><small>Relação de compressão</small><strong>{fmt(cycle.pressures.ratio, 2)}:1</strong></span>
+            </div>
+          </div>
+
+          <div className="cycle-visual-grid">
+            <PhChart cycle={cycle} />
+            <div className="cycle-side">
+              <h3>Leitura dos pontos</h3>
+              <div className="cycle-point-list">
+                {cycle.points.map((point) => (
+                  <div key={point.id}>
+                    <b>{point.id}</b>
+                    <span><strong>{point.label}</strong><small>{fmt(point.temperature, 1)} °C · {fmt(point.pressureBar, 2)} bar(a)</small></span>
+                    <em>h{point.id} = {fmt(point.enthalpy, 2)} kJ/kg</em>
+                  </div>
+                ))}
+              </div>
+              <ResultLine label="Descarga isentrópica h2s" value={fmt(cycle.idealDischarge.enthalpy, 2)} unit="kJ/kg" />
+              <ResultLine label="Título na entrada do evaporador" value={cycle.properties.qualityAtEvaporatorInlet === null ? "Fora da região bifásica" : fmt(cycle.properties.qualityAtEvaporatorInlet * 100, 1)} unit={cycle.properties.qualityAtEvaporatorInlet === null ? undefined : "% vapor"} />
+              <ResultLine label="Volume específico na sucção" value={fmt(cycle.properties.specificVolume, 5)} unit="m³/kg" />
+              <ResultLine label="Densidade na sucção" value={fmt(cycle.properties.suctionDensity, 3)} unit="kg/m³" />
+            </div>
+          </div>
+
+          <div className="cycle-balance">
+            <span><small>Evaporador</small><strong>{fmt(cycle.properties.refrigerationEffect, 2)} kJ/kg</strong><i>h1 − h4</i></span>
+            <span><small>Compressor</small><strong>{fmt(cycle.properties.compressorWork, 2)} kJ/kg</strong><i>h2 − h1</i></span>
+            <span><small>Condensador</small><strong>{fmt(cycle.properties.condenserHeat, 2)} kJ/kg</strong><i>h2 − h3</i></span>
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
+function PhChart({ cycle }: { cycle: CycleResponse }) {
+  const width = 820;
+  const height = 500;
+  const margin = { left: 76, right: 32, top: 30, bottom: 62 };
+  const enthalpies = [
+    ...cycle.dome.flatMap((point) => [point.liquidH, point.vaporH]),
+    ...cycle.points.map((point) => point.enthalpy),
+  ];
+  const pressures = [
+    ...cycle.dome.map((point) => point.pressureBar),
+    ...cycle.points.map((point) => point.pressureBar),
+  ].filter((value) => value > 0);
+  const rawMinH = Math.min(...enthalpies);
+  const rawMaxH = Math.max(...enthalpies);
+  const hPadding = Math.max(18, (rawMaxH - rawMinH) * .08);
+  const minH = rawMinH - hPadding;
+  const maxH = rawMaxH + hPadding;
+  const minLogP = Math.log10(Math.min(...pressures) * .82);
+  const maxLogP = Math.log10(Math.max(...pressures) * 1.18);
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const x = (enthalpy: number) => margin.left + (enthalpy - minH) / (maxH - minH) * plotWidth;
+  const y = (pressure: number) => margin.top + (maxLogP - Math.log10(pressure)) / (maxLogP - minLogP) * plotHeight;
+  const path = (points: Array<{ h: number; p: number }>) =>
+    points.map((point, index) => `${index ? "L" : "M"} ${x(point.h).toFixed(1)} ${y(point.p).toFixed(1)}`).join(" ");
+  const liquidCurve = cycle.dome.map((point) => ({ h: point.liquidH, p: point.pressureBar }));
+  const vaporCurve = cycle.dome.map((point) => ({ h: point.vaporH, p: point.pressureBar }));
+  const domeFill = `${path(liquidCurve)} ${path([...vaporCurve].reverse()).replace(/^M/, "L")} Z`;
+  const cyclePath = path([...cycle.points.map((point) => ({ h: point.enthalpy, p: point.pressureBar })), { h: cycle.points[0].enthalpy, p: cycle.points[0].pressureBar }]);
+  const xTicks = Array.from({ length: 6 }, (_, index) => minH + (maxH - minH) * index / 5);
+  const pressureTicks = [.2, .5, 1, 2, 5, 10, 20, 50, 100].filter((pressure) =>
+    Math.log10(pressure) >= minLogP && Math.log10(pressure) <= maxLogP
+  );
+  const labelOffsets: Record<string, { x: number; y: number; anchor: "start" | "end" }> = {
+    "1": { x: 12, y: -13, anchor: "start" },
+    "2": { x: 12, y: 24, anchor: "start" },
+    "3": { x: -12, y: -13, anchor: "end" },
+    "4": { x: -12, y: 25, anchor: "end" },
+  };
+
+  return (
+    <div className="ph-chart-wrap">
+      <svg className="ph-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Gráfico P-h do ciclo com ${cycle.fluid}`}>
+        <defs>
+          <linearGradient id="domeFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#70d9ff" stopOpacity=".22" />
+            <stop offset="1" stopColor="#70d9ff" stopOpacity=".035" />
+          </linearGradient>
+          <filter id="cycleGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        <rect x={margin.left} y={margin.top} width={plotWidth} height={plotHeight} className="ph-plot-bg" />
+        {xTicks.map((tick) => (
+          <g key={tick}>
+            <line x1={x(tick)} x2={x(tick)} y1={margin.top} y2={height - margin.bottom} className="ph-grid" />
+            <text x={x(tick)} y={height - margin.bottom + 25} textAnchor="middle" className="ph-axis-text">{fmt(tick, 0)}</text>
+          </g>
+        ))}
+        {pressureTicks.map((tick) => (
+          <g key={tick}>
+            <line x1={margin.left} x2={width - margin.right} y1={y(tick)} y2={y(tick)} className="ph-grid" />
+            <text x={margin.left - 12} y={y(tick) + 4} textAnchor="end" className="ph-axis-text">{fmt(tick, 1)}</text>
+          </g>
+        ))}
+
+        <path d={domeFill} fill="url(#domeFill)" />
+        <path d={path(liquidCurve)} className="ph-dome-line" />
+        <path d={path(vaporCurve)} className="ph-dome-line" />
+        <text x={x((Math.min(...enthalpies) + Math.max(...enthalpies)) / 2)} y={margin.top + 34} textAnchor="middle" className="ph-dome-label">REGIÃO DE SATURAÇÃO</text>
+
+        <path d={cyclePath} className="ph-cycle-line" filter="url(#cycleGlow)" />
+        {cycle.points.map((point) => {
+          const offset = labelOffsets[point.id];
+          return (
+            <g key={point.id} className="ph-point">
+              <circle cx={x(point.enthalpy)} cy={y(point.pressureBar)} r="8" />
+              <text x={x(point.enthalpy)} y={y(point.pressureBar) + 4} textAnchor="middle">{point.id}</text>
+              <text x={x(point.enthalpy) + offset.x} y={y(point.pressureBar) + offset.y} textAnchor={offset.anchor} className="ph-point-label">
+                h{point.id} = {fmt(point.enthalpy, 1)}
+              </text>
+            </g>
+          );
+        })}
+
+        <text x={margin.left + plotWidth / 2} y={height - 13} textAnchor="middle" className="ph-axis-title">Entalpia específica (kJ/kg)</text>
+        <text transform={`translate(18 ${margin.top + plotHeight / 2}) rotate(-90)`} textAnchor="middle" className="ph-axis-title">Pressão absoluta (bar)</text>
+      </svg>
+      <div className="ph-legend">
+        <span><i className="dome" /> Curva de saturação</span>
+        <span><i className="cycle" /> Ciclo calculado</span>
+      </div>
+    </div>
   );
 }
 
