@@ -140,12 +140,22 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
           <path className="glass-shine" d="M302 350 L318 620" />
           <path className="mug-base" d="M294 650 H488 Q484 684 456 686 H326 Q298 682 294 650 Z" />
           <g className="laser-engraving" filter="url(#coldGlow)">
-            <text className="laser-outline laser-rf" x="400" y="520" textAnchor="middle">RF</text>
-            <text className="laser-outline laser-name" x="400" y="550" textAnchor="middle">RAFAEL FABIANI</text>
-            <text className="laser-final laser-rf" x="400" y="520" textAnchor="middle">RF</text>
-            <text className="laser-final laser-name" x="400" y="550" textAnchor="middle">RAFAEL FABIANI</text>
+            <text className="laser-rf-letters" y="520">
+              <tspan className="laser-letter rf-letter" x="365" style={{ animationDelay: "4.7s" }}>R</tspan>
+              <tspan className="laser-letter rf-letter" x="408" style={{ animationDelay: "5.15s" }}>F</tspan>
+            </text>
+            <text className="laser-name-letters" y="550">
+              {"RAFAEL FABIANI".split("").map((letter, index) => (
+                <tspan
+                  key={`${letter}-${index}`}
+                  className="laser-letter name-letter"
+                  x={322 + index * 12}
+                  style={{ animationDelay: `${5.7 + index * .24}s` }}
+                >{letter}</tspan>
+              ))}
+            </text>
             <g className="laser-scanner">
-              <line x1="314" y1="0" x2="486" y2="0" />
+              <line x1="306" y1="0" x2="494" y2="0" />
               <circle cx="400" cy="0" r="6" />
               <circle className="laser-spark spark-one" cx="382" cy="-3" r="3" />
               <circle className="laser-spark spark-two" cx="418" cy="4" r="2.5" />
