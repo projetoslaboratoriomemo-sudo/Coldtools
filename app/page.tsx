@@ -1081,6 +1081,36 @@ function LiquidFlow() {
 
 type GeometryMode = "area" | "perimeter" | "volume";
 
+const geometryLengthUnits = [
+  { symbol: "mm", toMeter: .001 },
+  { symbol: "cm", toMeter: .01 },
+  { symbol: "m", toMeter: 1 },
+  { symbol: "km", toMeter: 1000 },
+  { symbol: "pol", toMeter: .0254 },
+  { symbol: "pés", toMeter: .3048 },
+];
+
+const geometryResultUnits: Record<GeometryMode, { symbol: string; toBase: number }[]> = {
+  perimeter: geometryLengthUnits.map(({ symbol, toMeter }) => ({ symbol, toBase: toMeter })),
+  area: [
+    { symbol: "mm²", toBase: 1e-6 },
+    { symbol: "cm²", toBase: 1e-4 },
+    { symbol: "m²", toBase: 1 },
+    { symbol: "km²", toBase: 1e6 },
+    { symbol: "pol²", toBase: .0254 ** 2 },
+    { symbol: "pés²", toBase: .3048 ** 2 },
+  ],
+  volume: [
+    { symbol: "mm³", toBase: 1e-9 },
+    { symbol: "cm³", toBase: 1e-6 },
+    { symbol: "m³", toBase: 1 },
+    { symbol: "mL", toBase: 1e-6 },
+    { symbol: "L", toBase: .001 },
+    { symbol: "pol³", toBase: .0254 ** 3 },
+    { symbol: "pés³", toBase: .3048 ** 3 },
+  ],
+};
+
 const geometryShapeFields: Record<string, string[]> = {
   "Quadrado": ["Lado"],
   "Retângulo": ["Comprimento", "Largura"],
@@ -1151,45 +1181,54 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
       ? ["Quadrado", "Retângulo", "Círculo", "Triângulo por lados", "Trapézio por lados", "Elipse"]
       : ["Cubo", "Paralelepípedo", "Cilindro", "Esfera", "Cone", "Pirâmide retangular"];
   const [shape, setShape] = useState(shapes[0]);
-  const [unit, setUnit] = useState("cm");
+  const [inputUnit, setInputUnit] = useState("cm");
+  const [outputUnit, setOutputUnit] = useState(
+    mode === "area" ? "cm²" : mode === "volume" ? "cm³" : "cm",
+  );
   const [dimensions, setDimensions] = useState(["", "", "", ""]);
   const labels = geometryShapeFields[shape];
   const values = labels.map((_, index) => n(dimensions[index]));
   const complete = values.every((value, index) => dimensions[index].trim() !== "" && value > 0);
-  let result = 0;
+  let rawResult = 0;
 
   if (complete && mode === "area") {
-    if (shape === "Quadrado") result = values[0] ** 2;
-    else if (shape === "Retângulo") result = values[0] * values[1];
-    else if (shape === "Círculo") result = Math.PI * (values[0] / 2) ** 2;
-    else if (shape === "Triângulo") result = values[0] * values[1] / 2;
-    else if (shape === "Trapézio") result = (values[0] + values[1]) * values[2] / 2;
-    else if (shape === "Elipse") result = Math.PI * (values[0] / 2) * (values[1] / 2);
+    if (shape === "Quadrado") rawResult = values[0] ** 2;
+    else if (shape === "Retângulo") rawResult = values[0] * values[1];
+    else if (shape === "Círculo") rawResult = Math.PI * (values[0] / 2) ** 2;
+    else if (shape === "Triângulo") rawResult = values[0] * values[1] / 2;
+    else if (shape === "Trapézio") rawResult = (values[0] + values[1]) * values[2] / 2;
+    else if (shape === "Elipse") rawResult = Math.PI * (values[0] / 2) * (values[1] / 2);
   }
 
   if (complete && mode === "perimeter") {
-    if (shape === "Quadrado") result = 4 * values[0];
-    else if (shape === "Retângulo") result = 2 * (values[0] + values[1]);
-    else if (shape === "Círculo") result = Math.PI * values[0];
-    else if (shape === "Triângulo por lados") result = values[0] + values[1] + values[2];
-    else if (shape === "Trapézio por lados") result = values[0] + values[1] + values[2] + values[3];
+    if (shape === "Quadrado") rawResult = 4 * values[0];
+    else if (shape === "Retângulo") rawResult = 2 * (values[0] + values[1]);
+    else if (shape === "Círculo") rawResult = Math.PI * values[0];
+    else if (shape === "Triângulo por lados") rawResult = values[0] + values[1] + values[2];
+    else if (shape === "Trapézio por lados") rawResult = values[0] + values[1] + values[2] + values[3];
     else if (shape === "Elipse") {
       const a = values[0] / 2, b = values[1] / 2;
-      result = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+      rawResult = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
     }
   }
 
   if (complete && mode === "volume") {
-    if (shape === "Cubo") result = values[0] ** 3;
-    else if (shape === "Paralelepípedo") result = values[0] * values[1] * values[2];
-    else if (shape === "Cilindro") result = Math.PI * (values[0] / 2) ** 2 * values[1];
-    else if (shape === "Esfera") result = 4 / 3 * Math.PI * (values[0] / 2) ** 3;
-    else if (shape === "Cone") result = Math.PI * (values[0] / 2) ** 2 * values[1] / 3;
-    else if (shape === "Pirâmide retangular") result = values[0] * values[1] * values[2] / 3;
+    if (shape === "Cubo") rawResult = values[0] ** 3;
+    else if (shape === "Paralelepípedo") rawResult = values[0] * values[1] * values[2];
+    else if (shape === "Cilindro") rawResult = Math.PI * (values[0] / 2) ** 2 * values[1];
+    else if (shape === "Esfera") rawResult = 4 / 3 * Math.PI * (values[0] / 2) ** 3;
+    else if (shape === "Cone") rawResult = Math.PI * (values[0] / 2) ** 2 * values[1] / 3;
+    else if (shape === "Pirâmide retangular") rawResult = values[0] * values[1] * values[2] / 3;
   }
 
   const title = mode === "area" ? "Área" : mode === "perimeter" ? "Perímetro" : "Volume";
-  const resultUnit = mode === "area" ? `${unit}²` : mode === "volume" ? `${unit}³` : unit;
+  const dimensionPower = mode === "area" ? 2 : mode === "volume" ? 3 : 1;
+  const inputFactor = geometryLengthUnits.find((item) => item.symbol === inputUnit)?.toMeter ?? 1;
+  const outputFactor = geometryResultUnits[mode].find((item) => item.symbol === outputUnit)?.toBase ?? 1;
+  const result = rawResult * inputFactor ** dimensionPower / outputFactor;
+  const formattedResult = result > 0 && (result < .000001 || result >= 1e9)
+    ? result.toExponential(4).replace(".", ",")
+    : fmt(result, 6);
 
   function changeShape(value: string) {
     setShape(value);
@@ -1199,14 +1238,15 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
   return (
     <Calculator
       result={complete ? <>
-        <div className="result-badge">{fmt(result, 4)} {resultUnit}</div>
-        <ResultLine label={title} value={fmt(result, 4)} unit={resultUnit} />
+        <div className="result-badge">{formattedResult} {outputUnit}</div>
+        <ResultLine label={title} value={formattedResult} unit={outputUnit} />
+        <ResultLine label="Medidas informadas em" value={inputUnit} />
         <ResultLine label="Forma selecionada" value={shape} />
       </> : undefined}
       note={shape === "Elipse" && mode === "perimeter" ? "Perímetro da elipse calculado pela aproximação de Ramanujan." : undefined}
     >
       <h2>Cálculo de {title.toLocaleLowerCase("pt-BR")}</h2>
-      <p className="calc-intro">Selecione a forma e informe suas dimensões usando a mesma unidade.</p>
+      <p className="calc-intro">Selecione a forma, informe a unidade usada nas medidas e escolha em qual unidade deseja receber o resultado.</p>
       <div className="shape-picker" aria-label="Escolha a forma geométrica">
         {shapes.map((item) => (
           <button key={item} className={shape === item ? "active" : ""} onClick={() => changeShape(item)}>
@@ -1216,12 +1256,23 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
         ))}
       </div>
       <div className="form-grid">
-        <SelectField label="Unidade das medidas" value={unit} onChange={setUnit} options={["mm", "cm", "m"]} />
+        <SelectField
+          label="Unidade das medidas informadas"
+          value={inputUnit}
+          onChange={setInputUnit}
+          options={geometryLengthUnits.map((item) => item.symbol)}
+        />
+        <SelectField
+          label={`Unidade desejada para ${title.toLocaleLowerCase("pt-BR")}`}
+          value={outputUnit}
+          onChange={setOutputUnit}
+          options={geometryResultUnits[mode].map((item) => item.symbol)}
+        />
         {labels.map((label, index) => (
           <Field
             key={label}
             label={label}
-            unit={unit}
+            unit={inputUnit}
             value={dimensions[index]}
             onChange={(value) => setDimensions((old) => old.map((item, itemIndex) => itemIndex === index ? value : item))}
           />
