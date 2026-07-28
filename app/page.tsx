@@ -1120,6 +1120,7 @@ const geometryShapeFields: Record<string, string[]> = {
   "Elipse": ["Eixo maior", "Eixo menor"],
   "Triângulo por lados": ["Lado A", "Lado B", "Lado C"],
   "Trapézio por lados": ["Lado A", "Lado B", "Lado C", "Lado D"],
+  "Mola helicoidal": ["Diâmetro externo", "Diâmetro do arame", "Número de espiras", "Passo entre espiras"],
   "Cubo": ["Aresta"],
   "Paralelepípedo": ["Comprimento", "Largura", "Altura"],
   "Cilindro": ["Diâmetro", "Altura"],
@@ -1138,6 +1139,12 @@ function GeometryShapeIcon({ shape }: { shape: string }) {
       {(shape === "Triângulo" || shape === "Triângulo por lados") && <polygon points="50,8 88,62 12,62" {...common} />}
       {(shape === "Trapézio" || shape === "Trapézio por lados") && <polygon points="30,12 70,12 89,61 11,61" {...common} />}
       {shape === "Elipse" && <ellipse cx="50" cy="36" rx="38" ry="23" {...common} />}
+      {shape === "Mola helicoidal" && <>
+        <path d="M10 37 C16 16 25 16 31 37 S46 58 52 37 S67 16 73 37 S88 58 94 37" {...common} />
+        <line x1="8" y1="58" x2="96" y2="58" stroke="currentColor" strokeWidth="1.4" strokeDasharray="4 4" />
+        <line x1="10" y1="52" x2="10" y2="64" {...common} />
+        <line x1="94" y1="52" x2="94" y2="64" {...common} />
+      </>}
       {shape === "Cubo" && <>
         <rect x="20" y="22" width="43" height="38" {...common} />
         <polyline points="20,22 37,10 80,10 63,22" {...common} />
@@ -1178,7 +1185,7 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
   const shapes = mode === "area"
     ? ["Quadrado", "Retângulo", "Círculo", "Triângulo", "Trapézio", "Elipse"]
     : mode === "perimeter"
-      ? ["Quadrado", "Retângulo", "Círculo", "Triângulo por lados", "Trapézio por lados", "Elipse"]
+      ? ["Quadrado", "Retângulo", "Círculo", "Triângulo por lados", "Trapézio por lados", "Elipse", "Mola helicoidal"]
       : ["Cubo", "Paralelepípedo", "Cilindro", "Esfera", "Cone", "Pirâmide retangular"];
   const [shape, setShape] = useState(shapes[0]);
   const [inputUnit, setInputUnit] = useState("cm");
@@ -1188,8 +1195,11 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
   const [dimensions, setDimensions] = useState(["", "", "", ""]);
   const labels = geometryShapeFields[shape];
   const values = labels.map((_, index) => n(dimensions[index]));
-  const complete = values.every((value, index) => dimensions[index].trim() !== "" && value > 0);
+  const filledDimensions = values.every((value, index) => dimensions[index].trim() !== "" && value > 0);
+  const validSpring = shape !== "Mola helicoidal" || values[0] > values[1];
+  const complete = filledDimensions && validSpring;
   let rawResult = 0;
+  let springTurnPerimeter = 0;
 
   if (complete && mode === "area") {
     if (shape === "Quadrado") rawResult = values[0] ** 2;
@@ -1209,6 +1219,11 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
     else if (shape === "Elipse") {
       const a = values[0] / 2, b = values[1] / 2;
       rawResult = Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+    } else if (shape === "Mola helicoidal") {
+      const meanDiameter = values[0] - values[1];
+      springTurnPerimeter = Math.PI * meanDiameter;
+      const helicalLengthPerTurn = Math.sqrt(springTurnPerimeter ** 2 + values[3] ** 2);
+      rawResult = helicalLengthPerTurn * values[2];
     }
   }
 
@@ -1226,9 +1241,11 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
   const inputFactor = geometryLengthUnits.find((item) => item.symbol === inputUnit)?.toMeter ?? 1;
   const outputFactor = geometryResultUnits[mode].find((item) => item.symbol === outputUnit)?.toBase ?? 1;
   const result = rawResult * inputFactor ** dimensionPower / outputFactor;
+  const springTurnResult = springTurnPerimeter * inputFactor / outputFactor;
   const formattedResult = result > 0 && (result < .000001 || result >= 1e9)
     ? result.toExponential(4).replace(".", ",")
     : fmt(result, 6);
+  const formattedSpringTurn = fmt(springTurnResult, 6);
 
   function changeShape(value: string) {
     setShape(value);
@@ -1239,11 +1256,18 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
     <Calculator
       result={complete ? <>
         <div className="result-badge">{formattedResult} {outputUnit}</div>
-        <ResultLine label={title} value={formattedResult} unit={outputUnit} />
+        <ResultLine label={shape === "Mola helicoidal" ? "Comprimento total do arame" : title} value={formattedResult} unit={outputUnit} />
+        {shape === "Mola helicoidal" && <ResultLine label="Perímetro médio por espira" value={formattedSpringTurn} unit={outputUnit} />}
         <ResultLine label="Medidas informadas em" value={inputUnit} />
         <ResultLine label="Forma selecionada" value={shape} />
       </> : undefined}
-      note={shape === "Elipse" && mode === "perimeter" ? "Perímetro da elipse calculado pela aproximação de Ramanujan." : undefined}
+      note={
+        shape === "Elipse" && mode === "perimeter"
+          ? "Perímetro da elipse calculado pela aproximação de Ramanujan."
+          : shape === "Mola helicoidal"
+            ? "O cálculo usa o diâmetro médio da mola e considera o avanço axial informado no passo."
+            : undefined
+      }
     >
       <h2>Cálculo de {title.toLocaleLowerCase("pt-BR")}</h2>
       <p className="calc-intro">Selecione a forma, informe a unidade usada nas medidas e escolha em qual unidade deseja receber o resultado.</p>
@@ -1255,6 +1279,12 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
           </button>
         ))}
       </div>
+      {shape === "Mola helicoidal" && (
+        <p className="calc-intro">
+          O passo é a distância axial entre duas espiras consecutivas. Em uma mola totalmente fechada, use aproximadamente o diâmetro do arame.
+          {filledDimensions && !validSpring && " O diâmetro externo precisa ser maior que o diâmetro do arame."}
+        </p>
+      )}
       <div className="form-grid">
         <SelectField
           label="Unidade das medidas informadas"
@@ -1272,7 +1302,7 @@ function GeometryCalculator({ mode }: { mode: GeometryMode }) {
           <Field
             key={label}
             label={label}
-            unit={inputUnit}
+            unit={shape === "Mola helicoidal" && label === "Número de espiras" ? "espiras" : inputUnit}
             value={dimensions[index]}
             onChange={(value) => setDimensions((old) => old.map((item, itemIndex) => itemIndex === index ? value : item))}
           />
