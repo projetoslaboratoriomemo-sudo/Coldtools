@@ -21,6 +21,7 @@ const tools: Tool[] = [
   { id: "conversor", title: "Conversor de refrigeração", description: "kW, kcal/h, BTU/h e TR.", category: "Refrigeração", icon: "❄", accent: "amber" },
   { id: "saturacao", title: "Régua de saturação", description: "Pressão em psig × temperatura do refrigerante.", category: "Refrigeração", icon: "↔", accent: "amber" },
   { id: "diagnostico-termico", title: "Superaquecimento e sub-resfriamento", description: "Calcule superaquecimento útil, total e sub-resfriamento.", category: "Refrigeração", icon: "∆", accent: "amber" },
+  { id: "trocadores-calor", title: "Evaporadores e condensadores", description: "Volume interno, áreas de troca e estimativa de líquido e vapor.", category: "Refrigeração", icon: "▦", accent: "amber" },
   { id: "solucoes-anticongelantes", title: "Soluções anticongelantes", description: "Proporção, congelamento e densidade da solução.", category: "Refrigeração", icon: "◒", accent: "amber" },
   { id: "congelamento-cerveja", title: "Congelamento da cerveja", description: "Estime o início do congelamento por estilo, álcool e densidade.", category: "Refrigeração", icon: "◐", accent: "amber" },
   { id: "orvalho", title: "Ponto de orvalho", description: "Temperatura, umidade e condensação.", category: "Refrigeração", icon: "◌", accent: "amber" },
@@ -343,6 +344,7 @@ function ToolWorkspace({
     conversor: <RefrigerationConverter />,
     saturacao: <SaturationRuler />,
     "diagnostico-termico": <ThermalDiagnostics />,
+    "trocadores-calor": <FinnedCoilCalculator />,
     "solucoes-anticongelantes": <AntifreezeMixture />,
     "congelamento-cerveja": <BeerFreezingPoint />,
     orvalho: <DewPoint />,
@@ -792,6 +794,185 @@ function ThermalDiagnostics() {
         <Field label="Saída do condensador" unit="°C" value={values.condenserOutlet} onChange={change("condenserOutlet")} allowNegative />
       </div>
       <button className="secondary" onClick={() => setValues({ lowPressure: "", highPressure: "", evaporatorOutlet: "", suction: "", condenserOutlet: "" })}>Limpar medições</button>
+    </Calculator>
+  );
+}
+
+function FinnedCoilCalculator() {
+  const [equipment, setEquipment] = useState("Evaporador");
+  const [fluid, setFluid] = useState<Refrigerant>("R134a");
+  const [geometry, setGeometry] = useState<Values>({
+    outerDiameter: "9,52",
+    wallThickness: "0,8",
+    tubeLength: "",
+    circuits: "1",
+    finWidth: "",
+    finHeight: "",
+    finThickness: "0,12",
+    finCount: "",
+    holesPerFin: "",
+  });
+  const [operation, setOperation] = useState<Values>({
+    pressure: "",
+    superheat: "5",
+    subcooling: "5",
+    voidFraction: "80",
+  });
+
+  const changeGeometry = (key: string) => (value: string) =>
+    setGeometry((old) => ({ ...old, [key]: value }));
+  const changeOperation = (key: string) => (value: string) =>
+    setOperation((old) => ({ ...old, [key]: value }));
+
+  function changeEquipment(value: string) {
+    setEquipment(value);
+    setOperation((old) => ({
+      ...old,
+      voidFraction: value === "Evaporador" ? "80" : "55",
+    }));
+  }
+
+  const outerDiameter = n(geometry.outerDiameter);
+  const wallThickness = n(geometry.wallThickness);
+  const innerDiameter = outerDiameter - 2 * wallThickness;
+  const tubeLength = n(geometry.tubeLength);
+  const circuits = Math.max(1, n(geometry.circuits));
+  const finWidth = n(geometry.finWidth);
+  const finHeight = n(geometry.finHeight);
+  const finThickness = n(geometry.finThickness);
+  const finCount = n(geometry.finCount);
+  const holesPerFin = n(geometry.holesPerFin);
+  const geometryComplete = [
+    outerDiameter,
+    wallThickness,
+    tubeLength,
+    circuits,
+    finWidth,
+    finHeight,
+    finThickness,
+    finCount,
+    holesPerFin,
+  ].every((value) => value > 0) && innerDiameter > 0;
+
+  const outerDiameterM = outerDiameter / 1000;
+  const innerDiameterM = innerDiameter / 1000;
+  const internalVolumeLiters = Math.PI * innerDiameterM ** 2 / 4 * tubeLength * 1000;
+  const coveredTubeLength = Math.min(tubeLength, finCount * holesPerFin * finThickness / 1000);
+  const primaryArea = Math.PI * outerDiameterM * Math.max(0, tubeLength - coveredTubeLength);
+  const grossFinFaceArea = finWidth / 1000 * (finHeight / 1000);
+  const holesAreaPerFin = holesPerFin * Math.PI * outerDiameterM ** 2 / 4;
+  const netFinFaceArea = Math.max(0, grossFinFaceArea - holesAreaPerFin);
+  const secondaryArea = 2 * finCount * netFinFaceArea;
+  const totalArea = primaryArea + secondaryArea;
+  const areaRatio = primaryArea > 0 ? secondaryArea / primaryArea : 0;
+
+  const vaporTable = refrigerantPressureTable[fluid] as ReadonlyArray<PressurePoint>;
+  const liquidTable = (fluid === "R410A" || fluid === "R404A"
+    ? refrigerantLiquidPressureTable[fluid]
+    : vaporTable) as ReadonlyArray<PressurePoint>;
+  const saturationTable = equipment === "Evaporador" ? vaporTable : liquidTable;
+  const pressure = n(operation.pressure);
+  const minimumPressure = saturationTable[0][1];
+  const maximumPressure = saturationTable[saturationTable.length - 1][1];
+  const pressureInRange = Math.min(maximumPressure, Math.max(minimumPressure, pressure));
+  const saturationTemperature = interpolateSaturationTemperature(saturationTable, pressureInRange);
+  const superheat = Math.max(0, n(operation.superheat));
+  const subcooling = Math.max(0, n(operation.subcooling));
+  const voidFraction = Math.min(.95, Math.max(.05, n(operation.voidFraction) / 100));
+  const operationComplete = operation.pressure.trim() !== "" && Number.isFinite(pressure);
+
+  const superheatedShare = equipment === "Evaporador"
+    ? Math.min(.35, Math.max(.08, .08 + superheat / 100))
+    : Math.min(.25, Math.max(.08, .08 + superheat / 200));
+  const subcooledShare = equipment === "Condensador"
+    ? Math.min(.30, Math.max(.05, .05 + subcooling / 100))
+    : 0;
+  const twoPhaseShare = Math.max(.20, 1 - superheatedShare - subcooledShare);
+
+  function phaseVolumes(estimatedVoid: number) {
+    const vapor = internalVolumeLiters * (
+      superheatedShare + twoPhaseShare * estimatedVoid
+    );
+    return {
+      vapor,
+      liquid: Math.max(0, internalVolumeLiters - vapor),
+    };
+  }
+
+  const centralPhase = phaseVolumes(voidFraction);
+  const lowerVoidPhase = phaseVolumes(Math.max(.05, voidFraction - .10));
+  const upperVoidPhase = phaseVolumes(Math.min(.95, voidFraction + .10));
+  const liquidMinimum = Math.min(lowerVoidPhase.liquid, upperVoidPhase.liquid);
+  const liquidMaximum = Math.max(lowerVoidPhase.liquid, upperVoidPhase.liquid);
+  const vaporMinimum = Math.min(lowerVoidPhase.vapor, upperVoidPhase.vapor);
+  const vaporMaximum = Math.max(lowerVoidPhase.vapor, upperVoidPhase.vapor);
+  const outletTemperature = equipment === "Evaporador"
+    ? saturationTemperature + superheat
+    : saturationTemperature - subcooling;
+
+  const result = geometryComplete ? (
+    <>
+      <div className="result-badge">{fmt(internalVolumeLiters, 3)} L internos</div>
+      <ResultLine label="Diâmetro interno calculado" value={fmt(innerDiameter, 2)} unit="mm" />
+      <ResultLine label="Volume interno total" value={fmt(internalVolumeLiters, 3)} unit="L" />
+      <ResultLine label="Volume por circuito" value={fmt(internalVolumeLiters / circuits, 3)} unit="L" />
+      <ResultLine label="Área primária dos tubos" value={fmt(primaryArea, 3)} unit="m²" />
+      <ResultLine label="Área secundária das aletas" value={fmt(secondaryArea, 3)} unit="m²" />
+      <ResultLine label="Área total de troca" value={fmt(totalArea, 3)} unit="m²" />
+      <ResultLine label="Relação secundária / primária" value={fmt(areaRatio, 1)} unit="×" />
+      {operationComplete && <>
+        <ResultLine label="Temperatura de saturação" value={fmt(saturationTemperature, 1)} unit="°C" />
+        <ResultLine label={equipment === "Evaporador" ? "Saída superaquecida estimada" : "Saída sub-resfriada estimada"} value={fmt(outletTemperature, 1)} unit="°C" />
+        <ResultLine label="Líquido — estimativa central" value={fmt(centralPhase.liquid, 3)} unit="L" />
+        <ResultLine label="Faixa provável de líquido" value={`${fmt(liquidMinimum, 3)} a ${fmt(liquidMaximum, 3)}`} unit="L" />
+        <ResultLine label="Vapor — estimativa central" value={fmt(centralPhase.vapor, 3)} unit="L" />
+        <ResultLine label="Faixa provável de vapor" value={`${fmt(vaporMinimum, 3)} a ${fmt(vaporMaximum, 3)}`} unit="L" />
+      </>}
+    </>
+  ) : undefined;
+
+  return (
+    <Calculator
+      result={result}
+      note="O volume e as áreas são geométricos. A divisão líquido/vapor é uma estimativa de ocupação baseada nas zonas térmicas e na fração de vazio adotada; não substitui cálculo de carga por modelo validado ou dado do fabricante."
+    >
+      <h2>Serpentina de tubos com aletas</h2>
+      <p className="calc-intro">Informe as dimensões construtivas. Use o comprimento total somando todos os tubos e retornos da serpentina.</p>
+
+      <h3>1. Geometria dos tubos</h3>
+      <div className="form-grid">
+        <Field label="Diâmetro externo do tubo" unit="mm" value={geometry.outerDiameter} onChange={changeGeometry("outerDiameter")} />
+        <Field label="Espessura da parede" unit="mm" value={geometry.wallThickness} onChange={changeGeometry("wallThickness")} />
+        <Field label="Comprimento total dos tubos" unit="m" value={geometry.tubeLength} onChange={changeGeometry("tubeLength")} />
+        <Field label="Número de circuitos" unit="circuitos" value={geometry.circuits} onChange={changeGeometry("circuits")} />
+      </div>
+
+      <h3>2. Geometria das aletas</h3>
+      <div className="form-grid">
+        <Field label="Largura de cada aleta" unit="mm" value={geometry.finWidth} onChange={changeGeometry("finWidth")} />
+        <Field label="Altura de cada aleta" unit="mm" value={geometry.finHeight} onChange={changeGeometry("finHeight")} />
+        <Field label="Espessura da aleta" unit="mm" value={geometry.finThickness} onChange={changeGeometry("finThickness")} />
+        <Field label="Quantidade total de aletas" unit="aletas" value={geometry.finCount} onChange={changeGeometry("finCount")} />
+        <Field label="Passagens de tubos por aleta" unit="furos" value={geometry.holesPerFin} onChange={changeGeometry("holesPerFin")} />
+      </div>
+
+      <h3>3. Estimativa de líquido e vapor</h3>
+      <p className="calc-intro">A fração de vazio representa quanto da região bifásica é ocupada por vapor. O sistema sugere 80% para evaporador e 55% para condensador, mas permite ajuste.</p>
+      <div className="form-grid">
+        <SelectField label="Equipamento" value={equipment} onChange={changeEquipment} options={["Evaporador", "Condensador"]} />
+        <SelectField label="Fluido refrigerante" value={fluid} onChange={(value) => setFluid(value as Refrigerant)} options={Object.keys(refrigerantPressureTable)} />
+        <Field label="Pressão de operação" unit="psig" value={operation.pressure} onChange={changeOperation("pressure")} allowNegative />
+        <Field label={equipment === "Evaporador" ? "Superaquecimento na saída" : "Superaquecimento na entrada"} unit="K" value={operation.superheat} onChange={changeOperation("superheat")} />
+        {equipment === "Condensador" && <Field label="Sub-resfriamento na saída" unit="K" value={operation.subcooling} onChange={changeOperation("subcooling")} />}
+        <Field label="Fração de vapor na região bifásica" unit="%" value={operation.voidFraction} onChange={changeOperation("voidFraction")} />
+      </div>
+      {geometryComplete && (
+        <div className="conditions">
+          <span>Região de vapor: {fmt(superheatedShare * 100, 0)}%</span>
+          <span>Região bifásica: {fmt(twoPhaseShare * 100, 0)}%</span>
+          {equipment === "Condensador" && <span>Região sub-resfriada: {fmt(subcooledShare * 100, 0)}%</span>}
+        </div>
+      )}
     </Calculator>
   );
 }
