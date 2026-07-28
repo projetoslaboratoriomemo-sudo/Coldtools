@@ -252,8 +252,17 @@ main { grid-column: 2; min-width: 0; }
 .foam-head { fill: #fff7dc; opacity: 0; transform-origin: 400px 390px; animation: foam-build .75s 4.35s ease-out forwards; }
 .glass-shine { fill: none; stroke: rgba(255,255,255,.5); stroke-width: 10; stroke-linecap: round; opacity: .55; }
 .beer-bubbles-large circle { fill: #fff0a5; opacity: 0; animation: beer-bubble 2s 3.1s ease-in infinite; }
-.glass-rf { fill: rgba(255,255,255,.95); font-size: 72px; font-weight: 950; letter-spacing: -5px; opacity: 0; animation: glass-mark 1s 4.8s ease-out forwards; }
-.glass-name { fill: rgba(255,255,255,.95); font-size: 17px; font-weight: 850; letter-spacing: 3px; opacity: 0; animation: glass-mark 1s 5.05s ease-out forwards; }
+.laser-rf { font-size: 72px; font-weight: 950; letter-spacing: -5px; }
+.laser-name { font-size: 17px; font-weight: 850; letter-spacing: 3px; }
+.laser-outline { fill: transparent; stroke: #88ff9c; stroke-width: 1.6; stroke-dasharray: 760; stroke-dashoffset: 760; opacity: 0; animation: laser-etch 1.9s 4.75s cubic-bezier(.2,.7,.2,1) forwards; }
+.laser-outline.laser-name { animation-delay: 5.05s; }
+.laser-final { fill: rgba(225,255,234,.92); stroke: rgba(255,255,255,.42); stroke-width: .7; opacity: 0; animation: laser-finish .35s 6.55s ease-out forwards; text-shadow: 0 0 10px rgba(102,209,122,.55); }
+.laser-scanner { color: #9dffac; transform: translateY(464px); opacity: 0; animation: laser-scan 2s 4.65s cubic-bezier(.35,0,.65,1) forwards; }
+.laser-scanner line { stroke: #7dff92; stroke-width: 3; stroke-linecap: round; }
+.laser-scanner > circle { fill: #effff2; }
+.laser-spark { fill: #c9ffd2; animation: laser-spark-pop .28s ease-out infinite alternate; }
+.laser-spark.spark-two { animation-delay: -.09s; }
+.laser-spark.spark-three { animation-delay: -.18s; }
 .frost-layer { fill: url(#iceBlue); stroke: #d9f9ff; stroke-width: 3; opacity: 0; transform-origin: 400px 710px; animation: frost-grow 1.8s 4.6s cubic-bezier(.2,.8,.2,1) forwards; filter: url(#coldGlow); }
 .cold-fog { fill: rgba(180,240,255,.2); opacity: 0; filter: blur(12px); animation: fog-roll 3.4s 4.4s ease-in-out infinite alternate; }
 .big-bolts { fill: #ffd43e; opacity: 0; animation: bolt-flash 2.2s .8s steps(2) infinite; }
@@ -280,7 +289,10 @@ main { grid-column: 2; min-width: 0; }
 @keyframes beer-wave { to { transform: translateX(15px) skewX(-6deg); } }
 @keyframes foam-build { from { opacity: 0; transform: translateY(28px) scale(.7); } to { opacity: 1; transform: none; } }
 @keyframes beer-bubble { 0% { opacity: 0; transform: translateY(0) scale(.5); } 20% { opacity: .9; } 100% { opacity: 0; transform: translateY(-170px) scale(1.1); } }
-@keyframes glass-mark { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+@keyframes laser-etch { 0% { opacity: 0; stroke-dashoffset: 760; } 8% { opacity: 1; } 85% { opacity: 1; stroke-dashoffset: 0; } 100% { opacity: .25; stroke-dashoffset: 0; } }
+@keyframes laser-scan { 0% { opacity: 0; transform: translateY(458px) scaleX(.2); } 8% { opacity: 1; transform: translateY(458px) scaleX(1); } 88% { opacity: 1; transform: translateY(560px) scaleX(1); } 100% { opacity: 0; transform: translateY(565px) scaleX(.15); } }
+@keyframes laser-finish { from { opacity: 0; filter: brightness(3); } to { opacity: 1; filter: brightness(1); } }
+@keyframes laser-spark-pop { from { opacity: .2; transform: scale(.35) translateY(0); } to { opacity: 1; transform: scale(1.8) translateY(-5px); } }
 @keyframes frost-grow { from { opacity: 0; transform: scale(.5) translateY(80px); } to { opacity: .88; transform: none; } }
 @keyframes fog-roll { from { opacity: .18; transform: translateX(-55px) scaleX(.8); } to { opacity: .5; transform: translateX(55px) scaleX(1.15); } }
 @keyframes bolt-flash { 0%,32%,100% { opacity: 0; } 35%,40% { opacity: 1; } 44% { opacity: .2; } 48% { opacity: .9; } 54% { opacity: 0; } }
