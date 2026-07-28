@@ -70,8 +70,8 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
             <feGaussianBlur stdDeviation="8" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
-          <clipPath id="pintClip">
-            <path d="M294 326 H506 L482 648 Q478 684 442 690 H358 Q322 684 318 648 Z" />
+          <clipPath id="mugClip">
+            <path d="M278 326 H504 V650 Q504 688 466 692 H316 Q278 688 278 650 Z" />
           </clipPath>
         </defs>
 
@@ -116,24 +116,29 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
           <circle cx="467" cy="310" r="4" />
         </g>
 
-        <g className="pint-glass">
-          <path className="glass-body" d="M294 326 H506 L482 648 Q478 684 442 690 H358 Q322 684 318 648 Z" />
-          <g clipPath="url(#pintClip)">
-            <rect className="beer-fill-large" x="292" y="354" width="216" height="340" fill="url(#beerGold)" />
-            <path className="beer-wave" d="M280 396 Q330 372 380 396 T480 396 T580 396 V440 H280 Z" />
+        <g className="beer-mug">
+          <path className="mug-handle" d="M500 390 H552 Q586 390 586 425 V548 Q586 585 548 585 H502 V535 H536 V440 H502" />
+          <path className="glass-body mug-body" d="M278 326 H504 V650 Q504 688 466 692 H316 Q278 688 278 650 Z" />
+          <g clipPath="url(#mugClip)">
+            <rect className="beer-fill-large" x="276" y="354" width="232" height="340" fill="url(#beerGold)" />
+            <path className="beer-wave" d="M260 396 Q315 372 370 396 T480 396 T590 396 V440 H260 Z" />
             <g className="beer-bubbles-large">
-              {[330,358,386,418,450,474].map((x,index) => <circle key={x} cx={x} cy={620-index*34} r={index%2 ? 5 : 8} style={{ animationDelay: `${index * .28}s` }} />)}
+              {[314,344,376,410,444,478].map((x,index) => <circle key={x} cx={x} cy={620-index*34} r={index%2 ? 5 : 8} style={{ animationDelay: `${index * .28}s` }} />)}
             </g>
           </g>
-          <g className="foam-head">
-            <circle cx="320" cy="368" r="29" />
-            <circle cx="354" cy="354" r="36" />
-            <circle cx="397" cy="360" r="42" />
-            <circle cx="442" cy="352" r="34" />
-            <circle cx="478" cy="370" r="28" />
-            <path d="M306 374 H490 V414 H306 Z" />
+          <g className="mug-ribs">
+            <path d="M308 344 V650" /><path d="M350 344 V668" /><path d="M450 344 V668" /><path d="M492 344 V650" />
           </g>
-          <path className="glass-shine" d="M330 350 L348 620" />
+          <g className="foam-head">
+            <circle cx="300" cy="368" r="29" />
+            <circle cx="340" cy="354" r="37" />
+            <circle cx="388" cy="358" r="43" />
+            <circle cx="438" cy="352" r="36" />
+            <circle cx="484" cy="369" r="30" />
+            <path d="M284 374 H500 V414 H284 Z" />
+          </g>
+          <path className="glass-shine" d="M302 350 L318 620" />
+          <path className="mug-base" d="M294 650 H488 Q484 684 456 686 H326 Q298 682 294 650 Z" />
           <text className="glass-rf" x="400" y="520" textAnchor="middle">RF</text>
           <text className="glass-name" x="400" y="550" textAnchor="middle">RAFAEL FABIANI</text>
         </g>
