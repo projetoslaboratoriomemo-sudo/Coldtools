@@ -109,6 +109,53 @@ main { grid-column: 2; min-width: 0; }
 .result-badge.warning { border-color: var(--amber); color: var(--amber); background: rgba(242,169,59,.07); }
 .conditions { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 20px; }
 .conditions span { border: 1px solid var(--line); border-radius: 99px; color: var(--muted); padding: 7px 10px; font-size: 10px; }
+.calc-card h3 { margin: 28px 0 12px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 16px; }
+.cycle-error { padding: 16px; border: 1px solid rgba(255,107,95,.55); border-radius: 11px; background: rgba(255,107,95,.07); color: #ff9289; font-size: 13px; line-height: 1.55; }
+.cycle-report { margin-top: 20px; border: 1px solid rgba(242,169,59,.35); border-radius: 18px; background: linear-gradient(145deg, rgba(42,49,54,.88), rgba(24,30,33,.97)); padding: 28px; overflow: hidden; }
+.cycle-report-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.cycle-report-head > div:first-child > span { color: var(--amber); font-size: 10px; font-weight: 850; letter-spacing: .14em; }
+.cycle-report-head h2 { margin: 7px 0 5px; font-size: 27px; }
+.cycle-report-head p { margin: 0; color: var(--muted); line-height: 1.55; }
+.cycle-kpis { display: grid; grid-template-columns: repeat(3,minmax(125px,1fr)); gap: 9px; }
+.cycle-kpis > span { min-height: 67px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px; background: rgba(10,14,16,.28); }
+.cycle-kpis small, .cycle-kpis strong { display: block; }
+.cycle-kpis small { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .07em; }
+.cycle-kpis strong { margin-top: 6px; font-size: 15px; }
+.cycle-visual-grid { margin-top: 24px; display: grid; grid-template-columns: minmax(0,1.45fr) minmax(310px,.55fr); gap: 18px; align-items: start; }
+.ph-chart-wrap, .cycle-side { border: 1px solid var(--line); border-radius: 14px; background: rgba(8,12,14,.38); }
+.ph-chart-wrap { min-width: 0; padding: 10px; }
+.ph-chart { width: 100%; height: auto; display: block; }
+.ph-plot-bg { fill: rgba(255,255,255,.012); stroke: rgba(255,255,255,.08); }
+.ph-grid { stroke: rgba(255,255,255,.075); stroke-width: 1; }
+.ph-axis-text { fill: #89938f; font-size: 11px; }
+.ph-axis-title { fill: #b9c2be; font-size: 12px; font-weight: 750; }
+.ph-dome-line { fill: none; stroke: #70d9ff; stroke-width: 2; opacity: .85; }
+.ph-dome-label { fill: rgba(112,217,255,.58); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+.ph-cycle-line { fill: none; stroke: var(--amber); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.ph-point circle { fill: #111719; stroke: #fff1d3; stroke-width: 2.5; }
+.ph-point > text:not(.ph-point-label) { fill: #fff; font-size: 10px; font-weight: 900; pointer-events: none; }
+.ph-point-label { fill: #fff3d8; stroke: #111719; stroke-width: 4px; paint-order: stroke fill; font-size: 12px; font-weight: 850; }
+.ph-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 18px; padding: 0 10px 10px; color: var(--muted); font-size: 10px; }
+.ph-legend span { display: flex; align-items: center; gap: 7px; }
+.ph-legend i { width: 22px; height: 3px; border-radius: 99px; }
+.ph-legend i.dome { background: #70d9ff; }
+.ph-legend i.cycle { background: var(--amber); }
+.cycle-side { padding: 20px; }
+.cycle-side h3 { margin: 0 0 13px; font-size: 16px; }
+.cycle-point-list { display: grid; gap: 8px; margin-bottom: 12px; }
+.cycle-point-list > div { display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 4px 10px; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,.065); border-radius: 10px; background: rgba(255,255,255,.02); }
+.cycle-point-list b { grid-row: span 2; width: 32px; height: 32px; border: 1px solid var(--amber); border-radius: 50%; display: grid; place-items: center; color: var(--amber); }
+.cycle-point-list span strong, .cycle-point-list span small { display: block; }
+.cycle-point-list span strong { font-size: 12px; }
+.cycle-point-list span small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.cycle-point-list em { color: #ffe0a7; font-size: 11px; font-style: normal; font-weight: 750; }
+.cycle-side .result-line strong { font-size: 14px; }
+.cycle-balance { margin-top: 18px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.cycle-balance > span { padding: 17px; border: 1px solid var(--line); border-radius: 12px; background: rgba(10,14,16,.27); }
+.cycle-balance small, .cycle-balance strong, .cycle-balance i { display: block; }
+.cycle-balance small { color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.cycle-balance strong { margin-top: 5px; font-size: 20px; }
+.cycle-balance i { margin-top: 4px; color: var(--amber); font-size: 10px; font-style: normal; }
 .choice-section { margin-top: 34px; }
 .choice-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-top: 18px; }
 .choice-grid > button { min-height: 170px; position: relative; border: 1px solid var(--line); border-radius: 14px; background: rgba(10,14,16,.26); display: grid; grid-template-columns: 86px 1fr; align-items: center; gap: 18px; padding: 20px; text-align: left; cursor: pointer; overflow: hidden; }
@@ -161,6 +208,8 @@ main { grid-column: 2; min-width: 0; }
   .tool-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .calculator-layout { grid-template-columns: 1fr; }
   .result-card { position: static; }
+  .cycle-report-head { display: grid; }
+  .cycle-visual-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -183,6 +232,12 @@ main { grid-column: 2; min-width: 0; }
   .calculator-layout { margin-top: 24px; }
   .calc-card, .result-card, .choice-section, .strobe-card { padding: 20px; }
   .form-grid, .choice-grid, .installation-grid { grid-template-columns: 1fr; }
+  .cycle-report { padding: 17px; }
+  .cycle-kpis, .cycle-balance { grid-template-columns: 1fr; }
+  .cycle-visual-grid { margin-top: 18px; }
+  .ph-chart-wrap { margin: 0 -8px; padding: 2px; overflow-x: auto; }
+  .ph-chart { min-width: 650px; }
+  .ph-legend { min-width: 650px; }
   .choice-grid > button { min-height: 145px; grid-template-columns: 72px 1fr; padding: 15px; }
   .choice-grid > button > span, .choice-grid > button > img { width: 72px; height: 72px; }
   .inner-head { align-items: flex-start; flex-direction: column; }
