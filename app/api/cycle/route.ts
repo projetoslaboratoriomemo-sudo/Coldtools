@@ -66,7 +66,13 @@ export async function POST(request: Request) {
     const displacement = Math.max(0, finite(body.displacement));
     const rpm = Math.max(0, finite(body.rpm));
     const volumetricEfficiency = Math.min(.98, Math.max(.05, finite(body.volumetricEfficiency, 70) / 100));
-    const isentropicEfficiency = Math.min(.98, Math.max(.05, finite(body.isentropicEfficiency, 65) / 100));
+    const informedIsentropicEfficiency = Math.min(.98, Math.max(.05, finite(body.isentropicEfficiency, 65) / 100));
+    const measuredDischargeCelsius = body.dischargeTemperature === null
+      || body.dischargeTemperature === undefined
+      || body.dischargeTemperature === ""
+      ? Number.NaN
+      : finite(body.dischargeTemperature, Number.NaN);
+    const calculateIsentropicEfficiency = Number.isFinite(measuredDischargeCelsius);
 
     if (![lowPsig, highPsig, superheat, subcooling].every(Number.isFinite)) {
       return NextResponse.json({ error: "Preencha as pressões, o superaquecimento e o sub-resfriamento." }, { status: 400 });
@@ -112,8 +118,35 @@ export async function POST(request: Request) {
       : props("D", "P", lowPressure, "T", suctionTemperatureK);
 
     const h2s = props("H", "P", highPressure, "S", s1);
-    const h2 = h1 + (h2s - h1) / isentropicEfficiency;
-    const dischargeTemperatureK = props("T", "P", highPressure, "H", h2);
+    const measuredDischargeTemperatureK = calculateIsentropicEfficiency
+      ? toK(measuredDischargeCelsius)
+      : Number.NaN;
+    const h2 = calculateIsentropicEfficiency
+      ? props("H", "P", highPressure, "T", measuredDischargeTemperatureK)
+      : h1 + (h2s - h1) / informedIsentropicEfficiency;
+    const dischargeTemperatureK = calculateIsentropicEfficiency
+      ? measuredDischargeTemperatureK
+      : props("T", "P", highPressure, "H", h2);
+    const actualCompressionWork = h2 - h1;
+    if (actualCompressionWork <= 0) {
+      return NextResponse.json(
+        { error: "A temperatura de descarga informada não representa uma compressão válida para estas pressões." },
+        { status: 422 },
+      );
+    }
+    const calculatedIsentropicEfficiency = (h2s - h1) / actualCompressionWork;
+    const isentropicEfficiency = calculateIsentropicEfficiency
+      ? calculatedIsentropicEfficiency
+      : informedIsentropicEfficiency;
+    const efficiencyWarning = !calculateIsentropicEfficiency
+      ? null
+      : calculatedIsentropicEfficiency > 1
+        ? "O resultado ficou acima de 100%. Revise as pressões, a temperatura de sucção e a temperatura de descarga."
+        : calculatedIsentropicEfficiency < .2
+          ? "A eficiência calculada ficou muito baixa. Confirme se o sensor de descarga estava bem fixado e se o sistema estava estabilizado."
+          : measuredDischargeTemperatureK <= condensingDewK
+            ? "A temperatura de descarga precisa ficar acima da temperatura de condensação para representar vapor superaquecido."
+            : null;
 
     const h3 = subcooling === 0
       ? props("H", "P", highPressure, "Q", 0)
@@ -206,6 +239,16 @@ export async function POST(request: Request) {
         cop,
         copIdeal,
         eer,
+      },
+      efficiency: {
+        source: calculateIsentropicEfficiency ? "measured-discharge" : "informed",
+        isentropic: isentropicEfficiency * 100,
+        valid: calculateIsentropicEfficiency
+          ? isentropicEfficiency > 0
+            && isentropicEfficiency <= 1
+            && measuredDischargeTemperatureK > condensingDewK
+          : true,
+        warning: efficiencyWarning,
       },
       compressor: {
         hasEstimate: hasCompressorEstimate,
