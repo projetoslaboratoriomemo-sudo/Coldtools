@@ -540,8 +540,16 @@ const fieldHelp: Record<string, string> = {
   "Número de polos": "Selecione a quantidade de polos elétricos do motor para estimar sua rotação síncrona.",
   "Rotação informada": "Informe a rotação real ou nominal do compressor em rotações por minuto.",
   "Rotação": "Informe a rotação do compressor em rotações por minuto (RPM).",
+  "Determinar eficiência volumétrica por": "Escolha “Prática pelo ensaio de líquido” para calcular a eficiência com a capacidade realmente medida ou “Teórica / estimada” para informar um percentual adotado.",
   "Eficiência volumétrica": "Informe a porcentagem do deslocamento teórico realmente aspirada pelo compressor. Se não souber, mantenha o valor sugerido.",
   "Eficiência volumétrica estimada": "Informe a eficiência volumétrica estimada. Ela corrige o deslocamento teórico para a vazão realmente aspirada.",
+  "Líquido do ensaio": "Selecione o líquido que entra quente e sai resfriado durante o ensaio. Densidade e calor específico serão calculados na temperatura média.",
+  "Temperatura de entrada do ensaio": "Informe a temperatura estabilizada do líquido imediatamente antes de entrar no equipamento.",
+  "Temperatura de saída do ensaio": "Informe a temperatura estabilizada do líquido imediatamente após sair do equipamento.",
+  "Vazão medida no ensaio": "Informe a vazão real medida durante o mesmo período das temperaturas de entrada e saída.",
+  "Unidade da vazão do ensaio": "Escolha se a vazão medida está em litros por hora ou litros por minuto.",
+  "Calor da bomba no sistema": "Informe somente a parcela da potência da bomba que termina como calor dentro do circuito ou banho resfriado. Deixe zero se não houver bomba ou se não souber.",
+  "Ganho térmico durante o ensaio": "Informe uma estimativa do calor recebido do ambiente enquanto o ensaio está estabilizado. Deixe zero para considerar somente o calor retirado do líquido.",
   "Determinar eficiência isentrópica por": "Escolha usar a temperatura de descarga medida no ensaio para calcular a eficiência automaticamente ou informar uma eficiência estimada.",
   "Temperatura de descarga medida": "Meça a temperatura no tubo de descarga, o mais próximo possível do compressor. Fixe e isole o sensor do ar ambiente e aguarde o sistema estabilizar.",
   "Eficiência isentrópica estimada": "Informe a eficiência usada para estimar o trabalho e a temperatura de descarga. Se não souber, mantenha o valor sugerido.",
@@ -1099,6 +1107,13 @@ type CycleResponse = {
     valid: boolean;
     warning: string | null;
   };
+  volumetricEfficiency: {
+    source: "liquid-test" | "informed";
+    value: number;
+    valid: boolean;
+    warning: string | null;
+    measuredEvaporatorCapacityKw: number | null;
+  };
   compressor: {
     hasEstimate: boolean;
     rpm: number;
@@ -1119,6 +1134,9 @@ function RefrigerationCycle() {
   const [fluid, setFluid] = useState<Refrigerant>("R134a");
   const [rotationMode, setRotationMode] = useState("Frequência e polos");
   const [efficiencyMode, setEfficiencyMode] = useState("Temperatura de descarga medida");
+  const [volumetricMode, setVolumetricMode] = useState("Prática pelo ensaio de líquido");
+  const [testLiquid, setTestLiquid] = useState<ThermalLiquid>("Água");
+  const [testFlowUnit, setTestFlowUnit] = useState("L/h");
   const [values, setValues] = useState<Values>({
     lowPressure: "27,8",
     highPressure: "153,5",
@@ -1131,6 +1149,13 @@ function RefrigerationCycle() {
     volumetricEfficiency: "70",
     isentropicEfficiency: "65",
     dischargeTemperature: "75",
+    testInletTemperature: "24",
+    testOutletTemperature: "3",
+    testFlow: "40",
+    testPumpHeat: "0",
+    testAmbientGain: "0",
+    testCustomDensity: "1",
+    testCustomCp: "4,18",
   });
   const [cycle, setCycle] = useState<CycleResponse | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -1141,6 +1166,23 @@ function RefrigerationCycle() {
   const calculatedRpm = rotationMode === "RPM manual"
     ? n(values.rpm)
     : (120 * n(values.frequency)) / Math.max(1, n(values.poles));
+  const testAverageTemperature = (n(values.testInletTemperature) + n(values.testOutletTemperature)) / 2;
+  const testTemperatureDifference = Math.abs(n(values.testInletTemperature) - n(values.testOutletTemperature));
+  const testProperties = thermalLiquidProperties(
+    testLiquid,
+    testAverageTemperature,
+    n(values.testCustomDensity),
+    n(values.testCustomCp),
+  );
+  const testFlowLh = testFlowUnit === "L/min" ? n(values.testFlow) * 60 : n(values.testFlow);
+  const testLiquidCapacityKw = Math.max(0, testFlowLh)
+    * Math.max(0, testProperties.density)
+    * Math.max(0, testProperties.cpKj)
+    * testTemperatureDifference
+    / 3600;
+  const testPumpHeatKw = Math.max(0, n(values.testPumpHeat)) / 1000;
+  const testAmbientGainKw = Math.max(0, n(values.testAmbientGain)) / 1000;
+  const measuredEvaporatorCapacityKw = testLiquidCapacityKw + testPumpHeatKw + testAmbientGainKw;
 
   useEffect(() => {
     const required = [
@@ -1149,11 +1191,37 @@ function RefrigerationCycle() {
       values.superheat,
       values.subcooling,
       ...(efficiencyMode === "Temperatura de descarga medida" ? [values.dischargeTemperature] : []),
+      ...(volumetricMode === "Prática pelo ensaio de líquido"
+        ? [
+          values.displacement,
+          values.testInletTemperature,
+          values.testOutletTemperature,
+          values.testFlow,
+          ...(testLiquid === "Personalizado" ? [values.testCustomDensity, values.testCustomCp] : []),
+        ]
+        : [values.volumetricEfficiency]),
     ];
     if (!required.every((value) => value.trim() !== "" && Number.isFinite(n(value)))) {
       setCycle(null);
       setStatus("error");
-      setError("Preencha os quatro dados de operação para calcular o ciclo.");
+      setError("Preencha todos os dados necessários para o modo de cálculo selecionado.");
+      return;
+    }
+    if (
+      volumetricMode === "Prática pelo ensaio de líquido"
+      && (
+        n(values.displacement) <= 0
+        || calculatedRpm <= 0
+        || n(values.testFlow) <= 0
+        || testTemperatureDifference <= 0
+        || testProperties.density <= 0
+        || testProperties.cpKj <= 0
+        || measuredEvaporatorCapacityKw <= 0
+      )
+    ) {
+      setCycle(null);
+      setStatus("error");
+      setError("No ensaio prático, informe deslocamento, rotação, vazão e temperaturas diferentes, todos com valores válidos.");
       return;
     }
 
@@ -1179,6 +1247,9 @@ function RefrigerationCycle() {
             dischargeTemperature: efficiencyMode === "Temperatura de descarga medida"
               ? n(values.dischargeTemperature)
               : null,
+            measuredEvaporatorCapacityKw: volumetricMode === "Prática pelo ensaio de líquido"
+              ? measuredEvaporatorCapacityKw
+              : null,
           }),
         });
         const data = await response.json();
@@ -1197,7 +1268,16 @@ function RefrigerationCycle() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [calculatedRpm, efficiencyMode, fluid, values]);
+  }, [
+    calculatedRpm,
+    efficiencyMode,
+    fluid,
+    measuredEvaporatorCapacityKw,
+    testLiquid,
+    testFlowUnit,
+    values,
+    volumetricMode,
+  ]);
 
   const result = status === "loading" ? (
     <div className="result-badge warning">Calculando propriedades…</div>
@@ -1226,8 +1306,22 @@ function RefrigerationCycle() {
       <ResultLine label="Temperatura de descarga real" value={fmt(cycle.temperatures.discharge, 1)} unit="°C" />
       <ResultLine label="Temperatura de descarga ideal (2s)" value={fmt(cycle.idealDischarge.temperature, 1)} unit="°C" />
       {cycle.efficiency.warning && <div className="cycle-error">{cycle.efficiency.warning}</div>}
+      <ResultLine
+        label={cycle.volumetricEfficiency.source === "liquid-test"
+          ? "Eficiência volumétrica prática"
+          : "Eficiência volumétrica adotada"}
+        value={fmt(cycle.volumetricEfficiency.value, 1)}
+        unit="%"
+      />
+      {cycle.volumetricEfficiency.source === "liquid-test" && <>
+        <ResultLine label="Carga retirada do líquido" value={fmt(testLiquidCapacityKw, 3)} unit="kW" />
+        <ResultLine label="Capacidade total medida adotada" value={fmt(cycle.volumetricEfficiency.measuredEvaporatorCapacityKw ?? 0, 3)} unit="kW" />
+      </>}
+      {cycle.volumetricEfficiency.warning && <div className="cycle-error">{cycle.volumetricEfficiency.warning}</div>}
       {cycle.compressor.hasEstimate && <>
         <ResultLine label="Vazão de refrigerante" value={fmt(cycle.compressor.massFlowKgH ?? 0, 2)} unit="kg/h" />
+        <ResultLine label="Vazão teórica pelo deslocamento" value={fmt(cycle.compressor.theoreticalFlowM3H, 3)} unit="m³/h" />
+        <ResultLine label="Vazão real na sucção" value={fmt(cycle.compressor.suctionFlowM3H, 3)} unit="m³/h" />
         <ResultLine label="Capacidade do evaporador" value={fmt(cycle.compressor.evaporatorCapacityKw ?? 0, 3)} unit="kW" />
         <ResultLine label="Capacidade em kcal/h" value={fmt((cycle.compressor.evaporatorCapacityKw ?? 0) * 859.845)} unit="kcal/h" />
         <ResultLine label="Capacidade em BTU/h" value={fmt((cycle.compressor.evaporatorCapacityKw ?? 0) * 3412.142)} unit="BTU/h" />
@@ -1242,7 +1336,9 @@ function RefrigerationCycle() {
     <>
       <Calculator
         result={result}
-        note="As propriedades são calculadas por equações de estado do CoolProp. A capacidade baseada no deslocamento é uma estimativa; mapas do fabricante continuam sendo a referência para seleção final."
+        note={volumetricMode === "Prática pelo ensaio de líquido"
+          ? "A eficiência volumétrica prática usa a capacidade medida no líquido, somada aos ganhos térmicos informados. Para maior precisão, estabilize o ensaio e informe a rotação real do compressor."
+          : "As propriedades são calculadas por equações de estado do CoolProp. A capacidade baseada no deslocamento e na eficiência informada é uma estimativa; mapas do fabricante continuam sendo a referência para seleção final."}
       >
         <h2>Ciclo de compressão de vapor</h2>
         <p className="calc-intro">Informe as condições medidas. O deslocamento é opcional: sem ele, o sistema calcula normalmente todas as propriedades por kg de refrigerante.</p>
@@ -1267,7 +1363,6 @@ function RefrigerationCycle() {
           </> : (
             <Field label="Rotação informada" unit="RPM" value={values.rpm} onChange={change("rpm")} />
           )}
-          <Field label="Eficiência volumétrica estimada" unit="%" value={values.volumetricEfficiency} onChange={change("volumetricEfficiency")} />
           <SelectField
             label="Determinar eficiência isentrópica por"
             value={efficiencyMode}
@@ -1286,9 +1381,50 @@ function RefrigerationCycle() {
             <Field label="Eficiência isentrópica estimada" unit="%" value={values.isentropicEfficiency} onChange={change("isentropicEfficiency")} />
           )}
         </div>
+
+        <h3>3. Eficiência volumétrica</h3>
+        <p className="calc-intro">No modo prático, a capacidade medida no líquido determina a vazão real de refrigerante. No modo teórico, o percentual informado é adotado diretamente.</p>
+        <div className="form-grid">
+          <SelectField
+            label="Determinar eficiência volumétrica por"
+            value={volumetricMode}
+            onChange={setVolumetricMode}
+            options={["Prática pelo ensaio de líquido", "Teórica / estimada"]}
+          />
+          {volumetricMode === "Teórica / estimada" ? (
+            <Field label="Eficiência volumétrica estimada" unit="%" value={values.volumetricEfficiency} onChange={change("volumetricEfficiency")} />
+          ) : <>
+            <SelectField
+              label="Líquido do ensaio"
+              value={testLiquid}
+              onChange={(value) => setTestLiquid(value as ThermalLiquid)}
+              options={["Água", "Água + 5% de etanol", "Cerveja / chope (5% ABV)", "Personalizado"]}
+            />
+            <Field label="Temperatura de entrada do ensaio" unit="°C" value={values.testInletTemperature} onChange={change("testInletTemperature")} allowNegative />
+            <Field label="Temperatura de saída do ensaio" unit="°C" value={values.testOutletTemperature} onChange={change("testOutletTemperature")} allowNegative />
+            <Field label="Vazão medida no ensaio" unit={testFlowUnit} value={values.testFlow} onChange={change("testFlow")} />
+            <SelectField label="Unidade da vazão do ensaio" value={testFlowUnit} onChange={setTestFlowUnit} options={["L/h", "L/min"]} />
+            <Field label="Calor da bomba no sistema" unit="W" value={values.testPumpHeat} onChange={change("testPumpHeat")} />
+            <Field label="Ganho térmico durante o ensaio" unit="W" value={values.testAmbientGain} onChange={change("testAmbientGain")} />
+            {testLiquid === "Personalizado" && <>
+              <Field label="Densidade" unit="kg/L" value={values.testCustomDensity} onChange={change("testCustomDensity")} />
+              <Field label="Calor específico" unit="kJ/kg·K" value={values.testCustomCp} onChange={change("testCustomCp")} />
+            </>}
+          </>}
+        </div>
+        {volumetricMode === "Prática pelo ensaio de líquido" && (
+          <div className="conditions">
+            <span>ΔT do ensaio: {fmt(testTemperatureDifference, 1)} °C</span>
+            <span>Vazão convertida: {fmt(testFlowLh, 1)} L/h</span>
+            <span>Carga no líquido: {fmt(testLiquidCapacityKw, 3)} kW</span>
+            <span>Capacidade total adotada: {fmt(measuredEvaporatorCapacityKw, 3)} kW</span>
+            <span>{testProperties.basis}</span>
+          </div>
+        )}
         <div className="conditions">
           <span>Rotação usada: {fmt(calculatedRpm, 0)} RPM</span>
           <span>{efficiencyMode === "Temperatura de descarga medida" ? "Eficiência calculada pelo ensaio" : "Eficiência informada pelo usuário"}</span>
+          <span>{volumetricMode === "Prática pelo ensaio de líquido" ? "Eficiência volumétrica medida" : "Eficiência volumétrica adotada"}</span>
           <span>Pressões informadas em psig</span>
           <span>Entalpias em kJ/kg</span>
         </div>
@@ -1324,6 +1460,7 @@ function RefrigerationCycle() {
               </div>
               <ResultLine label="Descarga isentrópica h2s" value={fmt(cycle.idealDischarge.enthalpy, 2)} unit="kJ/kg" />
               <ResultLine label="Eficiência isentrópica" value={fmt(cycle.efficiency.isentropic, 1)} unit="%" />
+              <ResultLine label="Eficiência volumétrica" value={fmt(cycle.volumetricEfficiency.value, 1)} unit="%" />
               <ResultLine label="Título na entrada do evaporador" value={cycle.properties.qualityAtEvaporatorInlet === null ? "Fora da região bifásica" : fmt(cycle.properties.qualityAtEvaporatorInlet * 100, 1)} unit={cycle.properties.qualityAtEvaporatorInlet === null ? undefined : "% vapor"} />
               <ResultLine label="Volume específico na sucção" value={fmt(cycle.properties.specificVolume, 5)} unit="m³/kg" />
               <ResultLine label="Densidade na sucção" value={fmt(cycle.properties.suctionDensity, 3)} unit="kg/m³" />
