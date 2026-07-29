@@ -147,14 +147,19 @@ main { grid-column: 2; min-width: 0; }
 .ph-dome-line { fill: none; stroke: #70d9ff; stroke-width: 2; opacity: .85; }
 .ph-dome-label { fill: rgba(112,217,255,.58); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
 .ph-cycle-line { fill: none; stroke: var(--amber); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.ph-isentropic-line { fill: none; stroke: #70d9ff; stroke-width: 2.5; stroke-dasharray: 8 7; stroke-linecap: round; opacity: .9; }
 .ph-point circle { fill: #111719; stroke: #fff1d3; stroke-width: 2.5; }
 .ph-point > text:not(.ph-point-label) { fill: #fff; font-size: 10px; font-weight: 900; pointer-events: none; }
 .ph-point-label { fill: #fff3d8; stroke: #111719; stroke-width: 4px; paint-order: stroke fill; font-size: 12px; font-weight: 850; }
+.ph-point-ideal circle { stroke: #70d9ff; stroke-dasharray: 3 2; }
+.ph-point-ideal > text:not(.ph-point-label) { fill: #70d9ff; font-size: 8px; }
+.ph-point-ideal .ph-point-label { fill: #bdefff; }
 .ph-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 18px; padding: 0 10px 10px; color: var(--muted); font-size: 10px; }
 .ph-legend span { display: flex; align-items: center; gap: 7px; }
 .ph-legend i { width: 22px; height: 3px; border-radius: 99px; }
 .ph-legend i.dome { background: #70d9ff; }
 .ph-legend i.cycle { background: var(--amber); }
+.ph-legend i.isentropic { background: repeating-linear-gradient(90deg, #70d9ff 0 7px, transparent 7px 11px); }
 .cycle-side { padding: 20px; }
 .cycle-side h3 { margin: 0 0 13px; font-size: 16px; }
 .cycle-point-list { display: grid; gap: 8px; margin-bottom: 12px; }
