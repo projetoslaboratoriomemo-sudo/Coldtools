@@ -22,6 +22,7 @@ const tools: Tool[] = [
   { id: "saturacao", title: "Régua de saturação", description: "Pressão em psig × temperatura do refrigerante.", category: "Refrigeração", icon: "↔", accent: "amber" },
   { id: "diagnostico-termico", title: "Superaquecimento e sub-resfriamento", description: "Calcule superaquecimento útil, total e sub-resfriamento.", category: "Refrigeração", icon: "∆", accent: "amber" },
   { id: "ciclo-frigorifico", title: "Ciclo frigorífico e gráfico P-h", description: "Entalpias, capacidade, COP e diagrama completo do sistema.", category: "Refrigeração", icon: "ℎ", accent: "amber" },
+  { id: "serpentina-submersa", title: "Serpentina submersa", description: "Dimensione tubos e meça a capacidade em banho de glicol 30/70.", category: "Refrigeração", icon: "∿", accent: "amber" },
   { id: "trocadores-calor", title: "Evaporadores e condensadores", description: "Volume interno, áreas de troca e estimativa de líquido e vapor.", category: "Refrigeração", icon: "▦", accent: "amber" },
   { id: "solucoes-anticongelantes", title: "Soluções anticongelantes", description: "Proporção, congelamento e densidade da solução.", category: "Refrigeração", icon: "◒", accent: "amber" },
   { id: "congelamento-cerveja", title: "Congelamento da cerveja", description: "Estime o início do congelamento por estilo, álcool e densidade.", category: "Refrigeração", icon: "◐", accent: "amber" },
@@ -415,6 +416,7 @@ function ToolWorkspace({
     saturacao: <SaturationRuler />,
     "diagnostico-termico": <ThermalDiagnostics />,
     "ciclo-frigorifico": <RefrigerationCycle />,
+    "serpentina-submersa": <SubmergedCoilCalculator />,
     "trocadores-calor": <FinnedCoilCalculator />,
     "solucoes-anticongelantes": <AntifreezeMixture />,
     "congelamento-cerveja": <BeerFreezingPoint />,
@@ -1213,6 +1215,386 @@ function PhChart({ cycle }: { cycle: CycleResponse }) {
         <span><i className="cycle" /> Ciclo calculado</span>
       </div>
     </div>
+  );
+}
+
+type GlycolProperties = {
+  cp: number;
+  density: number;
+  conductivity: number;
+  viscosity: number;
+};
+
+type CopperTubeOption = {
+  label: string;
+  outerDiameter: number;
+  wall: number;
+};
+
+const submergedCoilTubes: CopperTubeOption[] = [
+  { label: "1/4″ (6,35 mm)", outerDiameter: 6.35, wall: .70 },
+  { label: "5/16″ (7,94 mm)", outerDiameter: 7.94, wall: .70 },
+  { label: "3/8″ (9,52 mm)", outerDiameter: 9.52, wall: .80 },
+  { label: "1/2″ (12,70 mm)", outerDiameter: 12.70, wall: .90 },
+  { label: "5/8″ (15,88 mm)", outerDiameter: 15.88, wall: 1.00 },
+];
+
+const glycol30Properties = {
+  cp: [[-10, 3.821], [40, 3.903], [65, 3.972], [90, 4.041], [120, 4.123]] as PropertyPoint[],
+  density: [[-10, 1033.71], [40, 1019.56], [65, 1004.26], [90, 985.77], [120, 959.35]] as PropertyPoint[],
+  conductivity: [[-10, .4344], [40, .4622], [65, .4771], [90, .4846], [120, .4838]] as PropertyPoint[],
+  viscosity: [[-10, 4.5068], [40, 1.6295], [65, .9144], [90, .6040], [120, .4246]] as PropertyPoint[],
+};
+
+function glycol30At(temperature: number): GlycolProperties {
+  return {
+    cp: interpolateProperty(glycol30Properties.cp, temperature),
+    density: interpolateProperty(glycol30Properties.density, temperature),
+    conductivity: interpolateProperty(glycol30Properties.conductivity, temperature),
+    viscosity: interpolateProperty(glycol30Properties.viscosity, temperature),
+  };
+}
+
+function logarithmicTemperatureDifference(initial: number, final: number, evaporating: number) {
+  const initialApproach = initial - evaporating;
+  const finalApproach = final - evaporating;
+  if (initialApproach <= 0 || finalApproach <= 0) return 0;
+  if (Math.abs(initialApproach - finalApproach) < .001) return initialApproach;
+  return (initialApproach - finalApproach) / Math.log(initialApproach / finalApproach);
+}
+
+function submergedCoilHeatTransfer(
+  tube: CopperTubeOption,
+  bathTemperature: number,
+  evaporatingTemperature: number,
+) {
+  const properties = glycol30At((bathTemperature + evaporatingTemperature) / 2);
+  const outerDiameter = tube.outerDiameter / 1000;
+  const innerDiameter = Math.max(.001, (tube.outerDiameter - 2 * tube.wall) / 1000);
+  const temperatureDifference = Math.max(.5, Math.abs(bathTemperature - evaporatingTemperature));
+  const dynamicViscosity = properties.viscosity / 1000;
+  const kinematicViscosity = dynamicViscosity / properties.density;
+  const thermalDiffusivity = properties.conductivity / (properties.density * properties.cp * 1000);
+  const prandtl = kinematicViscosity / thermalDiffusivity;
+  const expansionCoefficient = .00028;
+  const rayleigh = 9.80665 * expansionCoefficient * temperatureDifference * outerDiameter ** 3
+    / Math.max(kinematicViscosity * thermalDiffusivity, 1e-15);
+  const nusselt = Math.pow(
+    .60 + (.387 * Math.pow(Math.max(rayleigh, 1), 1 / 6))
+      / Math.pow(1 + Math.pow(.559 / Math.max(prandtl, .01), 9 / 16), 8 / 27),
+    2,
+  );
+  const naturalOutside = nusselt * properties.conductivity / outerDiameter;
+  const copperConductivity = 385;
+  const boilingInside = 1200;
+  const overall = (outsideCoefficient: number) => 1 / (
+    1 / Math.max(outsideCoefficient, 1)
+    + outerDiameter * Math.log(outerDiameter / innerDiameter) / (2 * copperConductivity)
+    + outerDiameter / (innerDiameter * boilingInside)
+  );
+
+  return {
+    properties,
+    rayleigh,
+    prandtl,
+    naturalOutside,
+    conservativeU: overall(naturalOutside * .55),
+    naturalU: overall(naturalOutside),
+    circulatedU: overall(Math.max(650, naturalOutside * 2.2)),
+  };
+}
+
+function capacityToKw(value: number, unit: string) {
+  if (unit === "kW") return value;
+  if (unit === "kcal/h") return value / 859.845;
+  if (unit === "BTU/h") return value / 3412.142;
+  return value * 3.516853;
+}
+
+function SubmergedCoilCalculator() {
+  const [mode, setMode] = useState("Dimensionar serpentina");
+  const [capacitySource, setCapacitySource] = useState("Capacidade conhecida");
+  const [fluid, setFluid] = useState<Refrigerant>("R134a");
+  const [capacity, setCapacity] = useState("2");
+  const [capacityUnit, setCapacityUnit] = useState("kW");
+  const [tubeLabel, setTubeLabel] = useState("3/8″ (9,52 mm)");
+  const [design, setDesign] = useState<Values>({
+    lowPressure: "14,4",
+    highPressure: "153,5",
+    superheat: "5",
+    subcooling: "3",
+    displacement: "11,14",
+    rpm: "3600",
+    volumetricEfficiency: "70",
+    bathInitial: "5",
+    bathFinal: "-5",
+    safety: "25",
+  });
+  const [measurement, setMeasurement] = useState<Values>({
+    volume: "100",
+    initialTemperature: "5",
+    finalTemperature: "-5",
+    time: "60",
+    ambientGain: "0",
+    pumpPower: "0",
+    metalMass: "0",
+    evaporatingTemperature: "-10",
+    tubeLength: "",
+    tubeDiameter: "9,52",
+  });
+  const [cycle, setCycle] = useState<CycleResponse | null>(null);
+  const [cycleStatus, setCycleStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [cycleError, setCycleError] = useState("");
+
+  const changeDesign = (key: string) => (value: string) =>
+    setDesign((old) => ({ ...old, [key]: value }));
+  const changeMeasurement = (key: string) => (value: string) =>
+    setMeasurement((old) => ({ ...old, [key]: value }));
+
+  useEffect(() => {
+    if (mode !== "Dimensionar serpentina") return;
+    const required = [design.lowPressure, design.highPressure, design.superheat, design.subcooling];
+    if (!required.every((value) => value.trim() !== "" && Number.isFinite(n(value)))) {
+      setCycle(null);
+      setCycleStatus("error");
+      setCycleError("Preencha as condições do ciclo frigorífico.");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setCycleStatus("loading");
+      setCycleError("");
+      try {
+        const useCompressor = capacitySource === "Calcular pelo compressor";
+        const response = await fetch("/api/cycle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            fluid,
+            lowPressure: n(design.lowPressure),
+            highPressure: n(design.highPressure),
+            superheat: n(design.superheat),
+            subcooling: n(design.subcooling),
+            displacement: useCompressor ? n(design.displacement) : 0,
+            rpm: useCompressor ? n(design.rpm) : 0,
+            volumetricEfficiency: n(design.volumetricEfficiency),
+            isentropicEfficiency: 65,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Não foi possível calcular o ciclo.");
+        setCycle(data);
+        setCycleStatus("ready");
+      } catch (requestError) {
+        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        setCycle(null);
+        setCycleStatus("error");
+        setCycleError(requestError instanceof Error ? requestError.message : "Falha no cálculo.");
+      }
+    }, 420);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [capacitySource, design, fluid, mode]);
+
+  const selectedTube = submergedCoilTubes.find((tube) => tube.label === tubeLabel) ?? submergedCoilTubes[2];
+  const selectedInnerDiameter = selectedTube.outerDiameter - 2 * selectedTube.wall;
+  const bathInitial = n(design.bathInitial);
+  const bathFinal = n(design.bathFinal);
+  const bathMean = (bathInitial + bathFinal) / 2;
+  const evaporatingTemperature = cycle?.temperatures.evaporatingDew ?? -10;
+  const lmtd = logarithmicTemperatureDifference(bathInitial, bathFinal, evaporatingTemperature);
+  const enteredCapacityKw = capacityToKw(n(capacity), capacityUnit);
+  const compressorCapacityKw = cycle?.compressor.evaporatorCapacityKw ?? 0;
+  const designCapacityKw = capacitySource === "Calcular pelo compressor" ? compressorCapacityKw : enteredCapacityKw;
+  const safetyFactor = 1 + Math.max(0, n(design.safety)) / 100;
+  const transfer = submergedCoilHeatTransfer(selectedTube, bathMean, evaporatingTemperature);
+  const areaFor = (overallU: number) => designCapacityKw > 0 && lmtd > 0
+    ? designCapacityKw * 1000 * safetyFactor / (overallU * lmtd)
+    : 0;
+  const lengthFor = (overallU: number, tube = selectedTube) =>
+    areaFor(overallU) / (Math.PI * tube.outerDiameter / 1000);
+  const conservativeLength = lengthFor(transfer.conservativeU);
+  const naturalLength = lengthFor(transfer.naturalU);
+  const circulatedLength = lengthFor(transfer.circulatedU);
+  const refrigerationEffect = cycle?.properties.refrigerationEffect ?? 0;
+  const massFlowKgS = cycleStatus === "ready" && refrigerationEffect > 0 && designCapacityKw > 0
+    ? designCapacityKw / refrigerationEffect
+    : 0;
+
+  const tubeCandidates = submergedCoilTubes.flatMap((tube) => {
+    const tubeTransfer = submergedCoilHeatTransfer(tube, bathMean, evaporatingTemperature);
+    const candidateArea = designCapacityKw > 0 && lmtd > 0
+      ? designCapacityKw * 1000 * safetyFactor / (tubeTransfer.naturalU * lmtd)
+      : 0;
+    const totalLength = candidateArea / (Math.PI * tube.outerDiameter / 1000);
+    const innerDiameterM = (tube.outerDiameter - 2 * tube.wall) / 1000;
+    const flowArea = Math.PI * innerDiameterM ** 2 / 4;
+    return Array.from({ length: 6 }, (_, index) => {
+      const circuits = index + 1;
+      const massFlux = massFlowKgS / Math.max(circuits * flowArea, 1e-9);
+      const lengthPerCircuit = totalLength / circuits;
+      const insideRange = massFlux >= 100 && massFlux <= 350 && lengthPerCircuit <= 50;
+      const score = Math.abs(Math.log(Math.max(massFlux, 1) / 220))
+        + Math.max(0, lengthPerCircuit - 35) / 20 + circuits * .025;
+      return { tube, circuits, massFlux, totalLength, lengthPerCircuit, insideRange, score };
+    });
+  });
+  const validCandidates = tubeCandidates.filter((candidate) => candidate.insideRange);
+  const recommendedTube = [...(validCandidates.length ? validCandidates : tubeCandidates)]
+    .sort((a, b) => a.score - b.score)[0];
+  const designComplete = cycleStatus === "ready" && designCapacityKw > 0 && lmtd > 0
+    && bathInitial > evaporatingTemperature && bathFinal > evaporatingTemperature;
+
+  const measurementInitial = n(measurement.initialTemperature);
+  const measurementFinal = n(measurement.finalTemperature);
+  const measurementMean = (measurementInitial + measurementFinal) / 2;
+  const measurementDelta = Math.abs(measurementInitial - measurementFinal);
+  const measurementProperties = glycol30At(measurementMean);
+  const solutionMass = n(measurement.volume) * measurementProperties.density / 1000;
+  const solutionEnergyKj = solutionMass * measurementProperties.cp * measurementDelta;
+  const metalEnergyKj = Math.max(0, n(measurement.metalMass)) * .50 * measurementDelta;
+  const measurementSeconds = n(measurement.time) * 60;
+  const pullDownCapacityKw = (solutionEnergyKj + metalEnergyKj) / Math.max(measurementSeconds, 1);
+  const correctedMeasuredKw = pullDownCapacityKw
+    + Math.max(0, n(measurement.ambientGain)) / 1000
+    + Math.max(0, n(measurement.pumpPower)) / 1000;
+  const measurementLmtd = logarithmicTemperatureDifference(
+    Math.max(measurementInitial, measurementFinal),
+    Math.min(measurementInitial, measurementFinal),
+    n(measurement.evaporatingTemperature),
+  );
+  const measuredArea = Math.PI * n(measurement.tubeDiameter) / 1000 * n(measurement.tubeLength);
+  const measuredU = measuredArea > 0 && measurementLmtd > 0
+    ? correctedMeasuredKw * 1000 / (measuredArea * measurementLmtd)
+    : 0;
+  const measurementComplete = n(measurement.volume) > 0 && measurementDelta > 0
+    && n(measurement.time) > 0;
+
+  const designResult = cycleStatus === "loading" ? (
+    <div className="result-badge warning">Calculando ciclo e serpentina…</div>
+  ) : cycleStatus === "error" ? (
+    <div className="cycle-error">{cycleError}</div>
+  ) : designComplete && cycle ? (
+    <>
+      <div className="result-badge">
+        {recommendedTube
+          ? `${recommendedTube.tube.label} · ${recommendedTube.circuits} ${recommendedTube.circuits === 1 ? "circuito" : "circuitos"}`
+          : "Dimensionamento preliminar"}
+      </div>
+      <ResultLine label="Capacidade usada no projeto" value={fmt(designCapacityKw, 3)} unit="kW" />
+      <ResultLine label="Temperatura de evaporação" value={fmt(evaporatingTemperature, 1)} unit="°C" />
+      <ResultLine label="Diferença térmica logarítmica" value={fmt(lmtd, 2)} unit="K" />
+      <ResultLine label="Vazão de refrigerante" value={fmt(massFlowKgS * 3600, 2)} unit="kg/h" />
+      <ResultLine label="Tubo simulado — diâmetro interno" value={fmt(selectedInnerDiameter, 2)} unit="mm" />
+      <ResultLine label="Sem circulação — conservador" value={fmt(conservativeLength, 1)} unit="m" />
+      <ResultLine label="Convecção natural calculada" value={fmt(naturalLength, 1)} unit="m" />
+      <ResultLine label="Circulação moderada — estimativa" value={fmt(circulatedLength, 1)} unit="m" />
+      {recommendedTube && <>
+        <ResultLine label="Comprimento da recomendação" value={fmt(recommendedTube.totalLength, 1)} unit="m" />
+        <ResultLine label="Comprimento por circuito" value={fmt(recommendedTube.lengthPerCircuit, 1)} unit="m" />
+        <ResultLine label="Fluxo mássico por circuito" value={fmt(recommendedTube.massFlux, 0)} unit="kg/m²·s" />
+      </>}
+      <ResultLine label="Margem adicionada à área" value={fmt((safetyFactor - 1) * 100, 0)} unit="%" />
+    </>
+  ) : (
+    <div className="cycle-error">A temperatura final do banho precisa permanecer acima da temperatura de evaporação e todos os campos devem ser válidos.</div>
+  );
+
+  const measurementResult = measurementComplete ? (
+    <>
+      <div className="result-badge">{fmt(correctedMeasuredKw, 3)} kW medidos</div>
+      <ResultLine label="Capacidade no resfriamento do banho" value={fmt(pullDownCapacityKw, 3)} unit="kW" />
+      <ResultLine label="Capacidade corrigida do evaporador" value={fmt(correctedMeasuredKw, 3)} unit="kW" />
+      <ResultLine label="Capacidade corrigida" value={fmt(correctedMeasuredKw * 859.845)} unit="kcal/h" />
+      <ResultLine label="Capacidade corrigida" value={fmt(correctedMeasuredKw * 3412.142)} unit="BTU/h" />
+      <ResultLine label="Capacidade corrigida" value={fmt(correctedMeasuredKw / 3.516853, 3)} unit="TR" />
+      <ResultLine label="Massa da solução" value={fmt(solutionMass, 1)} unit="kg" />
+      <ResultLine label="Calor específico adotado" value={fmt(measurementProperties.cp, 3)} unit="kJ/kg·K" />
+      <ResultLine label="Energia retirada da solução" value={fmt(solutionEnergyKj / 3600, 3)} unit="kWh térmico" />
+      {measuredU > 0 && <ResultLine label="U medido da serpentina" value={fmt(measuredU, 0)} unit="W/m²·K" />}
+    </>
+  ) : undefined;
+
+  return (
+    <Calculator
+      result={mode === "Dimensionar serpentina" ? designResult : measurementResult}
+      note={mode === "Dimensionar serpentina"
+        ? "Pré-dimensionamento: a correlação externa considera convecção natural em tubo horizontal. A recomendação de diâmetro e circuitos usa fluxo mássico preliminar; confirme queda de pressão, distribuição e retorno de óleo antes da fabricação."
+        : "Para reduzir o erro, use a temperatura média de sensores no alto, centro e fundo do tanque. Ganho do ambiente e potência da bomba devem ser somados à energia retirada durante o resfriamento."}
+    >
+      <h2>Serpentina de cobre em glicol 30/70</h2>
+      <p className="calc-intro">Mistura adotada: 30% de propilenoglicol e 70% de água em volume. Escolha entre projetar uma serpentina ou medir a capacidade de uma já instalada.</p>
+      <div className="conditions">
+        <span>Propilenoglicol 30% v/v</span>
+        <span>Propriedades ajustadas pela temperatura</span>
+        <span>Correlação Churchill–Chu</span>
+      </div>
+      <div className="form-grid">
+        <SelectField label="Modo da ferramenta" value={mode} onChange={setMode} options={["Dimensionar serpentina", "Medir capacidade existente"]} />
+      </div>
+
+      {mode === "Dimensionar serpentina" ? <>
+        <h3>1. Capacidade e ciclo frigorífico</h3>
+        <div className="form-grid">
+          <SelectField label="Origem da capacidade" value={capacitySource} onChange={setCapacitySource} options={["Capacidade conhecida", "Calcular pelo compressor"]} />
+          <SelectField label="Fluido refrigerante" value={fluid} onChange={(value) => setFluid(value as Refrigerant)} options={Object.keys(refrigerantPressureTable)} />
+          {capacitySource === "Capacidade conhecida" && <>
+            <Field label="Capacidade do evaporador" value={capacity} onChange={setCapacity} />
+            <SelectField label="Unidade da capacidade" value={capacityUnit} onChange={setCapacityUnit} options={["kW", "kcal/h", "BTU/h", "TR"]} />
+          </>}
+          {capacitySource === "Calcular pelo compressor" && <>
+            <Field label="Deslocamento do compressor" unit="cm³/rev" value={design.displacement} onChange={changeDesign("displacement")} />
+            <Field label="Rotação" unit="RPM" value={design.rpm} onChange={changeDesign("rpm")} />
+            <Field label="Eficiência volumétrica" unit="%" value={design.volumetricEfficiency} onChange={changeDesign("volumetricEfficiency")} />
+          </>}
+          <Field label="Pressão de baixa" unit="psig" value={design.lowPressure} onChange={changeDesign("lowPressure")} allowNegative />
+          <Field label="Pressão de alta" unit="psig" value={design.highPressure} onChange={changeDesign("highPressure")} allowNegative />
+          <Field label="Superaquecimento total" unit="K" value={design.superheat} onChange={changeDesign("superheat")} />
+          <Field label="Sub-resfriamento" unit="K" value={design.subcooling} onChange={changeDesign("subcooling")} />
+        </div>
+
+        <h3>2. Banho e tubo a simular</h3>
+        <div className="form-grid">
+          <Field label="Temperatura inicial do banho" unit="°C" value={design.bathInitial} onChange={changeDesign("bathInitial")} allowNegative />
+          <Field label="Temperatura final do banho" unit="°C" value={design.bathFinal} onChange={changeDesign("bathFinal")} allowNegative />
+          <SelectField label="Tubo de cobre para comparação" value={tubeLabel} onChange={setTubeLabel} options={submergedCoilTubes.map((tube) => tube.label)} />
+          <Field label="Margem na área de troca" unit="%" value={design.safety} onChange={changeDesign("safety")} />
+        </div>
+
+        {designComplete && (
+          <div className="coil-scenario-grid">
+            <span><small>SEM CIRCULAÇÃO</small><strong>{fmt(conservativeLength, 1)} m</strong><em>U = {fmt(transfer.conservativeU, 0)} W/m²·K</em></span>
+            <span><small>CONVECÇÃO NATURAL</small><strong>{fmt(naturalLength, 1)} m</strong><em>U = {fmt(transfer.naturalU, 0)} W/m²·K</em></span>
+            <span><small>COM CIRCULAÇÃO</small><strong>{fmt(circulatedLength, 1)} m</strong><em>U ≈ {fmt(transfer.circulatedU, 0)} W/m²·K</em></span>
+          </div>
+        )}
+      </> : <>
+        <h3>1. Ensaio de resfriamento</h3>
+        <p className="calc-intro">Informe a média das temperaturas medidas no alto, centro e fundo antes e depois do ensaio.</p>
+        <div className="form-grid">
+          <Field label="Volume da solução" unit="L" value={measurement.volume} onChange={changeMeasurement("volume")} />
+          <Field label="Temperatura inicial média" unit="°C" value={measurement.initialTemperature} onChange={changeMeasurement("initialTemperature")} allowNegative />
+          <Field label="Temperatura final média" unit="°C" value={measurement.finalTemperature} onChange={changeMeasurement("finalTemperature")} allowNegative />
+          <Field label="Tempo de resfriamento" unit="min" value={measurement.time} onChange={changeMeasurement("time")} />
+          <Field label="Ganho térmico do ambiente" unit="W" value={measurement.ambientGain} onChange={changeMeasurement("ambientGain")} />
+          <Field label="Potência dissipada pela bomba" unit="W" value={measurement.pumpPower} onChange={changeMeasurement("pumpPower")} />
+          <Field label="Massa metálica (equiv. aço inox)" unit="kg" value={measurement.metalMass} onChange={changeMeasurement("metalMass")} />
+        </div>
+
+        <h3>2. Calibrar a troca térmica — opcional</h3>
+        <p className="calc-intro">Preencha estes dados para descobrir o coeficiente U real da sua serpentina e reaproveitá-lo em novos projetos.</p>
+        <div className="form-grid">
+          <Field label="Temperatura de evaporação" unit="°C" value={measurement.evaporatingTemperature} onChange={changeMeasurement("evaporatingTemperature")} allowNegative />
+          <Field label="Comprimento total da serpentina" unit="m" value={measurement.tubeLength} onChange={changeMeasurement("tubeLength")} />
+          <Field label="Diâmetro externo do tubo" unit="mm" value={measurement.tubeDiameter} onChange={changeMeasurement("tubeDiameter")} />
+        </div>
+      </>}
+    </Calculator>
   );
 }
 
