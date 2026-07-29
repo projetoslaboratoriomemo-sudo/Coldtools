@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Coldtools — caneca de chope RF</title>
+  <defs>
+    <linearGradient id="background" x1="18" y1="12" x2="108" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16394b"/>
+      <stop offset="1" stop-color="#071014"/>
+    </linearGradient>
+    <linearGradient id="beer" x1="0" y1="46" x2="0" y2="105" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffd766"/>
+      <stop offset=".52" stop-color="#e9a329"/>
+      <stop offset="1" stop-color="#aa5a0d"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="31" y1="32" x2="92" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e6fbff" stop-opacity=".42"/>
+      <stop offset=".48" stop-color="#70d9ff" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#278bc4" stop-opacity=".32"/>
+    </linearGradient>
+    <clipPath id="mug">
+      <path d="M27 38h67v59c0 10-7 17-17 17H44c-10 0-17-7-17-17Z"/>
+    </clipPath>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="url(#background)"/>
+  <path d="M94 52h9c10 0 17 7 17 17v18c0 11-7 18-18 18h-8V92h7c4 0 6-3 6-7V71c0-4-3-6-7-6h-6Z" fill="#dff9ff" fill-opacity=".1" stroke="#dff9ff" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M27 38h67v59c0 10-7 17-17 17H44c-10 0-17-7-17-17Z" fill="url(#glass)" stroke="#dff9ff" stroke-width="6" stroke-linejoin="round"/>
+  <g clip-path="url(#mug)">
+    <path d="M25 55c14-6 26 5 38 0 12-5 23 5 34 0v62H25Z" fill="url(#beer)"/>
+    <path d="M25 56c14-6 26 5 38 0 12-5 23 5 34 0" fill="none" stroke="#ffe58c" stroke-width="4"/>
+    <path d="M42 47v59M60 47v63M79 47v59" stroke="#e6fbff" stroke-opacity=".2" stroke-width="4"/>
+  </g>
+  <g fill="#fff7dc" stroke="#fff7dc" stroke-width="3">
+    <circle cx="35" cy="42" r="10"/>
+    <circle cx="50" cy="36" r="13"/>
+    <circle cx="67" cy="38" r="15"/>
+    <circle cx="84" cy="37" r="12"/>
+    <circle cx="92" cy="45" r="8"/>
+    <path d="M29 43h64v14H29Z"/>
+  </g>
+  <path d="M36 96h50c-2 8-7 12-15 12H51c-8 0-13-4-15-12Z" fill="#dff9ff" fill-opacity=".24" stroke="#dff9ff" stroke-width="3"/>
+  <text x="61" y="89" fill="#fff" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="900" text-anchor="middle" letter-spacing="-2">RF</text>
+</svg>
