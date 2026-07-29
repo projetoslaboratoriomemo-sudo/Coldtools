@@ -432,6 +432,15 @@ function thermalLiquidProperties(liquid: ThermalLiquid, temperature: number, cus
   return { density: customDensity, cpKj: customCp, basis: "Propriedades informadas pelo usuário" };
 }
 
+const testInsulationProfiles = {
+  "Bom — PU/PIR ≥ 40 mm": { uValue: .7, uMinimum: .4, uMaximum: 1 },
+  "Médio — isolamento de 20 a 40 mm": { uValue: 1.8, uMinimum: 1, uMaximum: 2.5 },
+  "Fraco — isolamento fino ou com falhas": { uValue: 4, uMinimum: 2.5, uMaximum: 5.5 },
+  "Sem isolamento": { uValue: 8, uMinimum: 6.8, uMaximum: 9 },
+} as const;
+
+type TestInsulation = keyof typeof testInsulationProfiles;
+
 function ToolWorkspace({
   tool,
   onBack,
@@ -549,7 +558,14 @@ const fieldHelp: Record<string, string> = {
   "Vazão medida no ensaio": "Informe a vazão real medida durante o mesmo período das temperaturas de entrada e saída.",
   "Unidade da vazão do ensaio": "Escolha se a vazão medida está em litros por hora ou litros por minuto.",
   "Calor da bomba no sistema": "Informe somente a parcela da potência da bomba que termina como calor dentro do circuito ou banho resfriado. Deixe zero se não houver bomba ou se não souber.",
-  "Ganho térmico durante o ensaio": "Informe uma estimativa do calor recebido do ambiente enquanto o ensaio está estabilizado. Deixe zero para considerar somente o calor retirado do líquido.",
+  "Correção do ganho térmico": "Escolha desconsiderar o ganho, estimá-lo pela temperatura ambiente e pelo isolamento ou informar um valor conhecido em watts.",
+  "Temperatura ambiente do ensaio": "Informe a temperatura do ar ao redor do equipamento durante o ensaio, longe da descarga quente do condensador.",
+  "Temperatura interna média": "Informe a temperatura média do banho, reservatório ou região fria durante o ensaio.",
+  "Isolamento do equipamento": "Escolha a condição mais próxima do isolamento térmico real. O sistema mostrará o coeficiente U adotado e uma faixa de incerteza.",
+  "Comprimento externo do equipamento": "Informe o comprimento externo aproximado da parte refrigerada do equipamento.",
+  "Largura externa do equipamento": "Informe a largura externa aproximada da parte refrigerada do equipamento.",
+  "Altura externa do equipamento": "Informe a altura externa aproximada da parte refrigerada do equipamento.",
+  "Ganho térmico informado": "Informe o ganho de calor do ambiente obtido por medição ou por outro cálculo. Não inclua novamente o calor da bomba.",
   "Determinar eficiência isentrópica por": "Escolha usar a temperatura de descarga medida no ensaio para calcular a eficiência automaticamente ou informar uma eficiência estimada.",
   "Temperatura de descarga medida": "Meça a temperatura no tubo de descarga, o mais próximo possível do compressor. Fixe e isole o sensor do ar ambiente e aguarde o sistema estabilizar.",
   "Eficiência isentrópica estimada": "Informe a eficiência usada para estimar o trabalho e a temperatura de descarga. Se não souber, mantenha o valor sugerido.",
@@ -1137,6 +1153,8 @@ function RefrigerationCycle() {
   const [volumetricMode, setVolumetricMode] = useState("Prática pelo ensaio de líquido");
   const [testLiquid, setTestLiquid] = useState<ThermalLiquid>("Água");
   const [testFlowUnit, setTestFlowUnit] = useState("L/h");
+  const [thermalGainMode, setThermalGainMode] = useState("Estimar pelo ambiente e isolamento");
+  const [testInsulation, setTestInsulation] = useState<TestInsulation>("Médio — isolamento de 20 a 40 mm");
   const [values, setValues] = useState<Values>({
     lowPressure: "27,8",
     highPressure: "153,5",
@@ -1154,6 +1172,11 @@ function RefrigerationCycle() {
     testFlow: "40",
     testPumpHeat: "0",
     testAmbientGain: "0",
+    testAmbientTemperature: "32",
+    testInternalTemperature: "0",
+    testExternalLength: "60",
+    testExternalWidth: "50",
+    testExternalHeight: "60",
     testCustomDensity: "1",
     testCustomCp: "4,18",
   });
@@ -1181,7 +1204,25 @@ function RefrigerationCycle() {
     * testTemperatureDifference
     / 3600;
   const testPumpHeatKw = Math.max(0, n(values.testPumpHeat)) / 1000;
-  const testAmbientGainKw = Math.max(0, n(values.testAmbientGain)) / 1000;
+  const testExternalLengthM = Math.max(0, n(values.testExternalLength)) / 100;
+  const testExternalWidthM = Math.max(0, n(values.testExternalWidth)) / 100;
+  const testExternalHeightM = Math.max(0, n(values.testExternalHeight)) / 100;
+  const testExternalAreaM2 = 2 * (
+    testExternalLengthM * testExternalWidthM
+    + testExternalLengthM * testExternalHeightM
+    + testExternalWidthM * testExternalHeightM
+  );
+  const testAmbientDifference = Math.max(0, n(values.testAmbientTemperature) - n(values.testInternalTemperature));
+  const testInsulationProfile = testInsulationProfiles[testInsulation];
+  const estimatedAmbientGainW = testInsulationProfile.uValue * testExternalAreaM2 * testAmbientDifference;
+  const testAmbientGainW = thermalGainMode === "Estimar pelo ambiente e isolamento"
+    ? estimatedAmbientGainW
+    : thermalGainMode === "Informar valor em W"
+      ? Math.max(0, n(values.testAmbientGain))
+      : 0;
+  const testAmbientGainKw = testAmbientGainW / 1000;
+  const testAmbientGainMinimumW = testInsulationProfile.uMinimum * testExternalAreaM2 * testAmbientDifference;
+  const testAmbientGainMaximumW = testInsulationProfile.uMaximum * testExternalAreaM2 * testAmbientDifference;
   const measuredEvaporatorCapacityKw = testLiquidCapacityKw + testPumpHeatKw + testAmbientGainKw;
 
   useEffect(() => {
@@ -1198,6 +1239,17 @@ function RefrigerationCycle() {
           values.testOutletTemperature,
           values.testFlow,
           ...(testLiquid === "Personalizado" ? [values.testCustomDensity, values.testCustomCp] : []),
+          ...(thermalGainMode === "Estimar pelo ambiente e isolamento"
+            ? [
+              values.testAmbientTemperature,
+              values.testInternalTemperature,
+              values.testExternalLength,
+              values.testExternalWidth,
+              values.testExternalHeight,
+            ]
+            : thermalGainMode === "Informar valor em W"
+              ? [values.testAmbientGain]
+              : []),
         ]
         : [values.volumetricEfficiency]),
     ];
@@ -1216,6 +1268,10 @@ function RefrigerationCycle() {
         || testTemperatureDifference <= 0
         || testProperties.density <= 0
         || testProperties.cpKj <= 0
+        || (
+          thermalGainMode === "Estimar pelo ambiente e isolamento"
+          && testExternalAreaM2 <= 0
+        )
         || measuredEvaporatorCapacityKw <= 0
       )
     ) {
@@ -1273,8 +1329,10 @@ function RefrigerationCycle() {
     efficiencyMode,
     fluid,
     measuredEvaporatorCapacityKw,
+    testInsulation,
     testLiquid,
     testFlowUnit,
+    thermalGainMode,
     values,
     volumetricMode,
   ]);
@@ -1315,7 +1373,10 @@ function RefrigerationCycle() {
       />
       {cycle.volumetricEfficiency.source === "liquid-test" && <>
         <ResultLine label="Carga retirada do líquido" value={fmt(testLiquidCapacityKw, 3)} unit="kW" />
+        <ResultLine label="Calor da bomba adotado" value={fmt(testPumpHeatKw * 1000, 1)} unit="W" />
+        <ResultLine label="Ganho térmico do ambiente" value={fmt(testAmbientGainW, 1)} unit="W" />
         <ResultLine label="Capacidade total medida adotada" value={fmt(cycle.volumetricEfficiency.measuredEvaporatorCapacityKw ?? 0, 3)} unit="kW" />
+        {thermalGainMode === "Desconsiderar" && <ResultLine label="Interpretação" value="Eficiência volumétrica mínima" />}
       </>}
       {cycle.volumetricEfficiency.warning && <div className="cycle-error">{cycle.volumetricEfficiency.warning}</div>}
       {cycle.compressor.hasEstimate && <>
@@ -1337,7 +1398,7 @@ function RefrigerationCycle() {
       <Calculator
         result={result}
         note={volumetricMode === "Prática pelo ensaio de líquido"
-          ? "A eficiência volumétrica prática usa a capacidade medida no líquido, somada aos ganhos térmicos informados. Para maior precisão, estabilize o ensaio e informe a rotação real do compressor."
+          ? "A eficiência volumétrica prática usa a capacidade medida no líquido, somada ao calor da bomba e ao ganho térmico informado ou estimado. Para maior precisão, estabilize o ensaio e informe a rotação real do compressor."
           : "As propriedades são calculadas por equações de estado do CoolProp. A capacidade baseada no deslocamento e na eficiência informada é uma estimativa; mapas do fabricante continuam sendo a referência para seleção final."}
       >
         <h2>Ciclo de compressão de vapor</h2>
@@ -1405,7 +1466,28 @@ function RefrigerationCycle() {
             <Field label="Vazão medida no ensaio" unit={testFlowUnit} value={values.testFlow} onChange={change("testFlow")} />
             <SelectField label="Unidade da vazão do ensaio" value={testFlowUnit} onChange={setTestFlowUnit} options={["L/h", "L/min"]} />
             <Field label="Calor da bomba no sistema" unit="W" value={values.testPumpHeat} onChange={change("testPumpHeat")} />
-            <Field label="Ganho térmico durante o ensaio" unit="W" value={values.testAmbientGain} onChange={change("testAmbientGain")} />
+            <SelectField
+              label="Correção do ganho térmico"
+              value={thermalGainMode}
+              onChange={setThermalGainMode}
+              options={["Desconsiderar", "Estimar pelo ambiente e isolamento", "Informar valor em W"]}
+            />
+            {thermalGainMode === "Estimar pelo ambiente e isolamento" && <>
+              <Field label="Temperatura ambiente do ensaio" unit="°C" value={values.testAmbientTemperature} onChange={change("testAmbientTemperature")} allowNegative />
+              <Field label="Temperatura interna média" unit="°C" value={values.testInternalTemperature} onChange={change("testInternalTemperature")} allowNegative />
+              <SelectField
+                label="Isolamento do equipamento"
+                value={testInsulation}
+                onChange={(value) => setTestInsulation(value as TestInsulation)}
+                options={Object.keys(testInsulationProfiles)}
+              />
+              <Field label="Comprimento externo do equipamento" unit="cm" value={values.testExternalLength} onChange={change("testExternalLength")} />
+              <Field label="Largura externa do equipamento" unit="cm" value={values.testExternalWidth} onChange={change("testExternalWidth")} />
+              <Field label="Altura externa do equipamento" unit="cm" value={values.testExternalHeight} onChange={change("testExternalHeight")} />
+            </>}
+            {thermalGainMode === "Informar valor em W" && (
+              <Field label="Ganho térmico informado" unit="W" value={values.testAmbientGain} onChange={change("testAmbientGain")} />
+            )}
             {testLiquid === "Personalizado" && <>
               <Field label="Densidade" unit="kg/L" value={values.testCustomDensity} onChange={change("testCustomDensity")} />
               <Field label="Calor específico" unit="kJ/kg·K" value={values.testCustomCp} onChange={change("testCustomCp")} />
@@ -1417,8 +1499,15 @@ function RefrigerationCycle() {
             <span>ΔT do ensaio: {fmt(testTemperatureDifference, 1)} °C</span>
             <span>Vazão convertida: {fmt(testFlowLh, 1)} L/h</span>
             <span>Carga no líquido: {fmt(testLiquidCapacityKw, 3)} kW</span>
+            <span>Ganho térmico adotado: {fmt(testAmbientGainW, 1)} W</span>
             <span>Capacidade total adotada: {fmt(measuredEvaporatorCapacityKw, 3)} kW</span>
             <span>{testProperties.basis}</span>
+            {thermalGainMode === "Estimar pelo ambiente e isolamento" && <>
+              <span>Área externa: {fmt(testExternalAreaM2, 2)} m²</span>
+              <span>U adotado: {fmt(testInsulationProfile.uValue, 2)} W/m²·K</span>
+              <span>Faixa provável: {fmt(testAmbientGainMinimumW, 0)} a {fmt(testAmbientGainMaximumW, 0)} W</span>
+            </>}
+            {thermalGainMode === "Desconsiderar" && <span>Resultado interpretado como eficiência mínima</span>}
           </div>
         )}
         <div className="conditions">
