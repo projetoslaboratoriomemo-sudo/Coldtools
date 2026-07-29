@@ -542,6 +542,8 @@ const fieldHelp: Record<string, string> = {
   "Rotação": "Informe a rotação do compressor em rotações por minuto (RPM).",
   "Eficiência volumétrica": "Informe a porcentagem do deslocamento teórico realmente aspirada pelo compressor. Se não souber, mantenha o valor sugerido.",
   "Eficiência volumétrica estimada": "Informe a eficiência volumétrica estimada. Ela corrige o deslocamento teórico para a vazão realmente aspirada.",
+  "Determinar eficiência isentrópica por": "Escolha usar a temperatura de descarga medida no ensaio para calcular a eficiência automaticamente ou informar uma eficiência estimada.",
+  "Temperatura de descarga medida": "Meça a temperatura no tubo de descarga, o mais próximo possível do compressor. Fixe e isole o sensor do ar ambiente e aguarde o sistema estabilizar.",
   "Eficiência isentrópica estimada": "Informe a eficiência usada para estimar o trabalho e a temperatura de descarga. Se não souber, mantenha o valor sugerido.",
   "Modo da ferramenta": "Escolha se deseja projetar uma nova serpentina ou medir uma serpentina já instalada.",
   "Origem da capacidade": "Use “Capacidade conhecida” se tiver a ficha técnica; escolha “Calcular pelo compressor” para estimar pelo deslocamento e pelas condições do ciclo.",
@@ -1091,6 +1093,12 @@ type CycleResponse = {
     copIdeal: number;
     eer: number;
   };
+  efficiency: {
+    source: "measured-discharge" | "informed";
+    isentropic: number;
+    valid: boolean;
+    warning: string | null;
+  };
   compressor: {
     hasEstimate: boolean;
     rpm: number;
@@ -1110,6 +1118,7 @@ type CycleResponse = {
 function RefrigerationCycle() {
   const [fluid, setFluid] = useState<Refrigerant>("R134a");
   const [rotationMode, setRotationMode] = useState("Frequência e polos");
+  const [efficiencyMode, setEfficiencyMode] = useState("Temperatura de descarga medida");
   const [values, setValues] = useState<Values>({
     lowPressure: "27,8",
     highPressure: "153,5",
@@ -1121,6 +1130,7 @@ function RefrigerationCycle() {
     rpm: "3600",
     volumetricEfficiency: "70",
     isentropicEfficiency: "65",
+    dischargeTemperature: "75",
   });
   const [cycle, setCycle] = useState<CycleResponse | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -1138,6 +1148,7 @@ function RefrigerationCycle() {
       values.highPressure,
       values.superheat,
       values.subcooling,
+      ...(efficiencyMode === "Temperatura de descarga medida" ? [values.dischargeTemperature] : []),
     ];
     if (!required.every((value) => value.trim() !== "" && Number.isFinite(n(value)))) {
       setCycle(null);
@@ -1165,6 +1176,9 @@ function RefrigerationCycle() {
             rpm: calculatedRpm,
             volumetricEfficiency: n(values.volumetricEfficiency),
             isentropicEfficiency: n(values.isentropicEfficiency),
+            dischargeTemperature: efficiencyMode === "Temperatura de descarga medida"
+              ? n(values.dischargeTemperature)
+              : null,
           }),
         });
         const data = await response.json();
@@ -1183,7 +1197,7 @@ function RefrigerationCycle() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [calculatedRpm, fluid, values]);
+  }, [calculatedRpm, efficiencyMode, fluid, values]);
 
   const result = status === "loading" ? (
     <div className="result-badge warning">Calculando propriedades…</div>
@@ -1202,6 +1216,16 @@ function RefrigerationCycle() {
       <ResultLine label="COP ideal" value={fmt(cycle.properties.copIdeal, 3)} />
       <ResultLine label="COP estimado" value={fmt(cycle.properties.cop, 3)} />
       <ResultLine label="EER estimado" value={fmt(cycle.properties.eer, 2)} unit="BTU/Wh" />
+      <ResultLine
+        label={cycle.efficiency.source === "measured-discharge"
+          ? "Eficiência isentrópica calculada"
+          : "Eficiência isentrópica adotada"}
+        value={fmt(cycle.efficiency.isentropic, 1)}
+        unit="%"
+      />
+      <ResultLine label="Temperatura de descarga real" value={fmt(cycle.temperatures.discharge, 1)} unit="°C" />
+      <ResultLine label="Temperatura de descarga ideal (2s)" value={fmt(cycle.idealDischarge.temperature, 1)} unit="°C" />
+      {cycle.efficiency.warning && <div className="cycle-error">{cycle.efficiency.warning}</div>}
       {cycle.compressor.hasEstimate && <>
         <ResultLine label="Vazão de refrigerante" value={fmt(cycle.compressor.massFlowKgH ?? 0, 2)} unit="kg/h" />
         <ResultLine label="Capacidade do evaporador" value={fmt(cycle.compressor.evaporatorCapacityKw ?? 0, 3)} unit="kW" />
@@ -1233,7 +1257,7 @@ function RefrigerationCycle() {
         </div>
 
         <h3>2. Compressor</h3>
-        <p className="calc-intro">Se você não tiver as eficiências, mantenha os valores sugeridos e interprete a capacidade como estimativa.</p>
+        <p className="calc-intro">Use a temperatura de descarga do ensaio para calcular automaticamente a eficiência isentrópica. Se não tiver essa medição, você ainda pode informar uma eficiência estimada.</p>
         <div className="form-grid">
           <Field label="Deslocamento do compressor" unit="cm³/rev" value={values.displacement} onChange={change("displacement")} />
           <SelectField label="Definir rotação por" value={rotationMode} onChange={setRotationMode} options={["Frequência e polos", "RPM manual"]} />
@@ -1244,10 +1268,27 @@ function RefrigerationCycle() {
             <Field label="Rotação informada" unit="RPM" value={values.rpm} onChange={change("rpm")} />
           )}
           <Field label="Eficiência volumétrica estimada" unit="%" value={values.volumetricEfficiency} onChange={change("volumetricEfficiency")} />
-          <Field label="Eficiência isentrópica estimada" unit="%" value={values.isentropicEfficiency} onChange={change("isentropicEfficiency")} />
+          <SelectField
+            label="Determinar eficiência isentrópica por"
+            value={efficiencyMode}
+            onChange={setEfficiencyMode}
+            options={["Temperatura de descarga medida", "Eficiência estimada"]}
+          />
+          {efficiencyMode === "Temperatura de descarga medida" ? (
+            <Field
+              label="Temperatura de descarga medida"
+              unit="°C"
+              value={values.dischargeTemperature}
+              onChange={change("dischargeTemperature")}
+              allowNegative
+            />
+          ) : (
+            <Field label="Eficiência isentrópica estimada" unit="%" value={values.isentropicEfficiency} onChange={change("isentropicEfficiency")} />
+          )}
         </div>
         <div className="conditions">
           <span>Rotação usada: {fmt(calculatedRpm, 0)} RPM</span>
+          <span>{efficiencyMode === "Temperatura de descarga medida" ? "Eficiência calculada pelo ensaio" : "Eficiência informada pelo usuário"}</span>
           <span>Pressões informadas em psig</span>
           <span>Entalpias em kJ/kg</span>
         </div>
@@ -1282,6 +1323,7 @@ function RefrigerationCycle() {
                 ))}
               </div>
               <ResultLine label="Descarga isentrópica h2s" value={fmt(cycle.idealDischarge.enthalpy, 2)} unit="kJ/kg" />
+              <ResultLine label="Eficiência isentrópica" value={fmt(cycle.efficiency.isentropic, 1)} unit="%" />
               <ResultLine label="Título na entrada do evaporador" value={cycle.properties.qualityAtEvaporatorInlet === null ? "Fora da região bifásica" : fmt(cycle.properties.qualityAtEvaporatorInlet * 100, 1)} unit={cycle.properties.qualityAtEvaporatorInlet === null ? undefined : "% vapor"} />
               <ResultLine label="Volume específico na sucção" value={fmt(cycle.properties.specificVolume, 5)} unit="m³/kg" />
               <ResultLine label="Densidade na sucção" value={fmt(cycle.properties.suctionDensity, 3)} unit="kg/m³" />
@@ -1306,6 +1348,7 @@ function PhChart({ cycle }: { cycle: CycleResponse }) {
   const enthalpies = [
     ...cycle.dome.flatMap((point) => [point.liquidH, point.vaporH]),
     ...cycle.points.map((point) => point.enthalpy),
+    cycle.idealDischarge.enthalpy,
   ];
   const pressures = [
     ...cycle.dome.map((point) => point.pressureBar),
@@ -1328,6 +1371,10 @@ function PhChart({ cycle }: { cycle: CycleResponse }) {
   const vaporCurve = cycle.dome.map((point) => ({ h: point.vaporH, p: point.pressureBar }));
   const domeFill = `${path(liquidCurve)} ${path([...vaporCurve].reverse()).replace(/^M/, "L")} Z`;
   const cyclePath = path([...cycle.points.map((point) => ({ h: point.enthalpy, p: point.pressureBar })), { h: cycle.points[0].enthalpy, p: cycle.points[0].pressureBar }]);
+  const isentropicPath = path([
+    { h: cycle.points[0].enthalpy, p: cycle.points[0].pressureBar },
+    { h: cycle.idealDischarge.enthalpy, p: cycle.points[1].pressureBar },
+  ]);
   const xTicks = Array.from({ length: 6 }, (_, index) => minH + (maxH - minH) * index / 5);
   const pressureTicks = [.2, .5, 1, 2, 5, 10, 20, 50, 100].filter((pressure) =>
     Math.log10(pressure) >= minLogP && Math.log10(pressure) <= maxLogP
@@ -1372,6 +1419,7 @@ function PhChart({ cycle }: { cycle: CycleResponse }) {
         <path d={path(vaporCurve)} className="ph-dome-line" />
         <text x={x((Math.min(...enthalpies) + Math.max(...enthalpies)) / 2)} y={margin.top + 34} textAnchor="middle" className="ph-dome-label">REGIÃO DE SATURAÇÃO</text>
 
+        <path d={isentropicPath} className="ph-isentropic-line" />
         <path d={cyclePath} className="ph-cycle-line" filter="url(#cycleGlow)" />
         {cycle.points.map((point) => {
           const offset = labelOffsets[point.id];
@@ -1385,6 +1433,18 @@ function PhChart({ cycle }: { cycle: CycleResponse }) {
             </g>
           );
         })}
+        <g className="ph-point ph-point-ideal">
+          <circle cx={x(cycle.idealDischarge.enthalpy)} cy={y(cycle.points[1].pressureBar)} r="7" />
+          <text x={x(cycle.idealDischarge.enthalpy)} y={y(cycle.points[1].pressureBar) + 4} textAnchor="middle">2s</text>
+          <text
+            x={x(cycle.idealDischarge.enthalpy) - 12}
+            y={y(cycle.points[1].pressureBar) - 14}
+            textAnchor="end"
+            className="ph-point-label"
+          >
+            h2s = {fmt(cycle.idealDischarge.enthalpy, 1)}
+          </text>
+        </g>
 
         <text x={margin.left + plotWidth / 2} y={height - 13} textAnchor="middle" className="ph-axis-title">Entalpia específica (kJ/kg)</text>
         <text transform={`translate(18 ${margin.top + plotHeight / 2}) rotate(-90)`} textAnchor="middle" className="ph-axis-title">Pressão absoluta (bar)</text>
@@ -1392,6 +1452,7 @@ function PhChart({ cycle }: { cycle: CycleResponse }) {
       <div className="ph-legend">
         <span><i className="dome" /> Curva de saturação</span>
         <span><i className="cycle" /> Ciclo calculado</span>
+        <span><i className="isentropic" /> Compressão isentrópica</span>
       </div>
     </div>
   );
