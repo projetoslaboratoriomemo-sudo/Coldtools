@@ -44,13 +44,45 @@ const nav: { label: Category; icon: string }[] = [
 ];
 
 function IntroScreen({ onEnter }: { onEnter: () => void }) {
+  const [liteMode, setLiteMode] = useState(false);
+  const [settled, setSettled] = useState(false);
   const snowflakes = [
     [82,118,1.1],[154,214,.8],[696,126,1],[635,242,.7],[92,498,.8],[716,530,1.1],
     [210,92,.65],[588,78,.75],[194,604,.9],[620,626,.7],[62,316,.6],[744,352,.7],
   ];
 
+  useEffect(() => {
+    const device = navigator as Navigator & {
+      deviceMemory?: number;
+      connection?: { saveData?: boolean };
+    };
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const limitedProcessor = typeof device.hardwareConcurrency === "number" && device.hardwareConcurrency <= 4;
+    const limitedMemory = typeof device.deviceMemory === "number" && device.deviceMemory <= 4;
+    if (reducedMotion || limitedProcessor || limitedMemory || device.connection?.saveData) {
+      setLiteMode(true);
+    }
+
+    let firstFrame = 0;
+    let frameRequest = window.requestAnimationFrame((timestamp) => {
+      firstFrame = timestamp;
+      frameRequest = window.requestAnimationFrame((nextTimestamp) => {
+        if (nextTimestamp - firstFrame > 120) setLiteMode(true);
+      });
+    });
+    const settleTimer = window.setTimeout(() => setSettled(true), 8500);
+
+    return () => {
+      window.cancelAnimationFrame(frameRequest);
+      window.clearTimeout(settleTimer);
+    };
+  }, []);
+
   return (
-    <main className="intro-screen cold-beer-electric">
+    <main className={`intro-screen cold-beer-electric${liteMode ? " intro-lite" : ""}${settled ? " intro-settled" : ""}`}>
+      <button className="intro-emergency" onClick={onEnter}>
+        <span>Pular animação</span><b>Ir para as ferramentas</b><i>→</i>
+      </button>
       <div className="cold-vignette" />
       <svg className="beer-machine" viewBox="0 0 800 760" aria-label="Chope sendo servido com gelo, refrigeração e energia elétrica">
         <defs>
@@ -69,8 +101,8 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
             <stop offset=".45" stopColor="#eef8f5" />
             <stop offset="1" stopColor="#56666b" />
           </linearGradient>
-          <filter id="coldGlow" x="-100%" y="-100%" width="300%" height="300%">
-            <feGaussianBlur stdDeviation="8" result="blur" />
+          <filter id="coldGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
           <clipPath id="mugClip">
