@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 type Category = "Início" | "Elétrica" | "Refrigeração" | "Vazão" | "Geometria";
 
@@ -462,6 +462,142 @@ function Calculator({
   );
 }
 
+const fieldHelp: Record<string, string> = {
+  "Potência": "Informe a potência elétrica do equipamento. Normalmente esse valor aparece na etiqueta em watts (W).",
+  "Potência nominal": "Digite a potência indicada na etiqueta do equipamento quando ele está ligado.",
+  "Unidade da potência": "Escolha se a potência informada está em watts (W) ou quilowatts (kW).",
+  "Tensão": "Informe a tensão elétrica medida ou indicada na etiqueta, por exemplo 127 V ou 220 V.",
+  "Tensão de entrada": "Informe a tensão disponível antes do componente ou circuito.",
+  "Tensão de saída": "Informe a tensão desejada ou medida depois do componente.",
+  "Corrente": "Informe a corrente elétrica em ampères. Pode ser medida com alicate amperímetro ou consultada na etiqueta.",
+  "Resistência": "Informe a resistência elétrica em ohms (Ω), medida com o circuito desligado e desenergizado.",
+  "Resistência da carga": "Informe a resistência elétrica do equipamento alimentado pelo circuito.",
+  "Capacitor": "Informe a capacitância em microfarads (µF), normalmente impressa no corpo do capacitor.",
+  "Frequência": "Selecione ou informe a frequência da rede ou do motor, normalmente 50 Hz ou 60 Hz.",
+  "Modo do ciclo": "Escolha se você conhece o percentual de funcionamento ou os tempos ligado e desligado.",
+  "Tempo ligado no período": "Informe qual percentual do período o equipamento permanece ligado. Exemplo: 50 significa metade do tempo.",
+  "Tempo ligado no ciclo": "Informe quantos minutos o equipamento fica ligado em cada ciclo.",
+  "Tempo desligado no ciclo": "Informe quantos minutos o equipamento permanece desligado entre dois acionamentos.",
+  "Horas disponíveis por dia": "Informe por quantas horas diárias o equipamento pode funcionar ou permanecer energizado.",
+  "Dias de operação no mês": "Informe quantos dias por mês o equipamento normalmente é utilizado.",
+  "Tarifa média de energia": "Informe o valor médio cobrado por cada kWh. Consulte a conta de energia e inclua impostos se desejar uma estimativa mais próxima.",
+  "Seção do cabo": "Selecione a área da seção do condutor de cobre em mm², conhecida popularmente como bitola.",
+  "Tipo de instalação": "Escolha como o cabo será instalado. B1 e B2 representam eletrodutos; C representa cabo fixado ou em bandeja com melhor ventilação.",
+  "Circuito": "Escolha monofásico ou trifásico conforme a alimentação elétrica do equipamento.",
+  "Circuitos no mesmo eletroduto": "Informe quantos circuitos carregados passam juntos no mesmo eletroduto. Mais circuitos reduzem a corrente admissível.",
+  "Circuitos no eletroduto": "Informe quantos circuitos carregados compartilham o eletroduto para aplicar o fator de agrupamento.",
+  "Fator de segurança": "Informe a margem adicional desejada. Exemplo: 20% significa dimensionar acima do valor calculado.",
+  "Informar por": "Escolha qual grandeza você conhece para que o sistema calcule as demais.",
+  "Comprimento": "Informe o comprimento total do trecho considerado, incluindo o percurso de ida e volta quando indicado.",
+  "Valor": "Digite o valor numérico que deseja converter.",
+  "Unidade": "Escolha a unidade correspondente ao valor informado.",
+  "Temperatura ambiente": "Informe a temperatura do ar no local da medição, longe de superfícies quentes ou frias.",
+  "Umidade relativa": "Informe a umidade relativa do ar em porcentagem, medida com um higrômetro.",
+  "Fluido refrigerante": "Selecione o refrigerante utilizado no sistema. A pressão, a temperatura e as entalpias mudam conforme o fluido.",
+  "Pressão": "Informe a pressão lida no manômetro em psig. Valores abaixo da pressão atmosférica podem ser negativos.",
+  "Pressão de baixa": "Informe a pressão medida na sucção ou no lado de baixa do sistema, em psig.",
+  "Pressão de alta": "Informe a pressão medida na descarga ou no lado de alta do sistema, em psig.",
+  "Pressão de operação": "Informe a pressão do componente que está sendo analisado, medida com o sistema estabilizado.",
+  "Saída do evaporador": "Meça a temperatura no tubo imediatamente após a saída do evaporador, antes de grandes trechos de sucção.",
+  "Temperatura de sucção": "Meça a temperatura no tubo de sucção próximo à entrada do compressor.",
+  "Saída do condensador": "Meça a temperatura da linha de líquido imediatamente após a saída do condensador.",
+  "Superaquecimento total": "Informe a diferença entre a temperatura da sucção no compressor e a temperatura de saturação da baixa.",
+  "Sub-resfriamento": "Informe quantos graus o líquido está abaixo da temperatura de condensação.",
+  "Deslocamento do compressor": "Informe o volume deslocado pelo compressor em cada volta. Consulte a ficha técnica; o valor costuma aparecer em cm³/rev.",
+  "Definir rotação por": "Escolha calcular a rotação pela frequência e número de polos ou informar o RPM diretamente.",
+  "Número de polos": "Selecione a quantidade de polos elétricos do motor para estimar sua rotação síncrona.",
+  "Rotação informada": "Informe a rotação real ou nominal do compressor em rotações por minuto.",
+  "Rotação": "Informe a rotação do compressor em rotações por minuto (RPM).",
+  "Eficiência volumétrica": "Informe a porcentagem do deslocamento teórico realmente aspirada pelo compressor. Se não souber, mantenha o valor sugerido.",
+  "Eficiência volumétrica estimada": "Informe a eficiência volumétrica estimada. Ela corrige o deslocamento teórico para a vazão realmente aspirada.",
+  "Eficiência isentrópica estimada": "Informe a eficiência usada para estimar o trabalho e a temperatura de descarga. Se não souber, mantenha o valor sugerido.",
+  "Modo da ferramenta": "Escolha se deseja projetar uma nova serpentina ou medir uma serpentina já instalada.",
+  "Origem da capacidade": "Use “Capacidade conhecida” se tiver a ficha técnica; escolha “Calcular pelo compressor” para estimar pelo deslocamento e pelas condições do ciclo.",
+  "Capacidade do evaporador": "Informe a carga frigorífica que a serpentina precisa absorver, e não a potência elétrica consumida pelo compressor.",
+  "Unidade da capacidade": "Selecione a unidade usada na capacidade informada: kW, kcal/h, BTU/h ou TR.",
+  "Temperatura inicial do banho": "Informe a temperatura média da solução no início do resfriamento.",
+  "Temperatura final do banho": "Informe a menor temperatura que o banho precisa atingir durante a operação.",
+  "Tubo de cobre para comparação": "Escolha uma bitola comercial para visualizar a área e o comprimento necessários. A ferramenta também indicará uma recomendação preliminar.",
+  "Margem na área de troca": "Adicione uma reserva à área calculada para compensar estratificação, sujeira, aproximações e variações de operação.",
+  "Volume da solução": "Informe o volume total de água com glicol existente no reservatório.",
+  "Temperatura inicial média": "Use a média dos sensores instalados no alto, centro e fundo do tanque antes de ligar o compressor.",
+  "Temperatura final média": "Use a média dos mesmos sensores ao final do período de resfriamento.",
+  "Tempo de resfriamento": "Informe o tempo decorrido entre as temperaturas inicial e final, com o compressor funcionando.",
+  "Ganho térmico do ambiente": "Informe o calor que entra no tanque pelo ambiente. Se não tiver medido, use zero e interprete o resultado como capacidade líquida.",
+  "Potência dissipada pela bomba": "Informe a potência elétrica da bomba que acaba convertida em calor dentro da solução.",
+  "Massa metálica (equiv. aço inox)": "Informe a massa aproximada de tanque, tubos e peças metálicas que também esfriaram durante o ensaio. Se não souber, use zero.",
+  "Temperatura de evaporação": "Informe a temperatura de saturação correspondente à pressão de baixa. Ela deve ficar abaixo da temperatura do banho.",
+  "Comprimento total da serpentina": "Some todos os trechos de cobre que ficam efetivamente submersos na solução.",
+  "Diâmetro externo do tubo": "Informe o diâmetro medido por fora do tubo de cobre, sem descontar a espessura da parede.",
+  "Espessura da parede": "Informe a espessura do cobre para calcular o diâmetro e o volume internos.",
+  "Comprimento total dos tubos": "Some o comprimento de todos os tubos e circuitos que fazem parte do trocador.",
+  "Número de circuitos": "Informe quantos caminhos paralelos o refrigerante percorre dentro do trocador.",
+  "Largura de cada aleta": "Informe a largura externa de uma aleta, de borda a borda.",
+  "Altura de cada aleta": "Informe a altura externa de uma aleta, de borda a borda.",
+  "Espessura da aleta": "Informe a espessura da chapa utilizada em cada aleta.",
+  "Quantidade total de aletas": "Conte todas as aletas atravessadas pelos tubos do trocador.",
+  "Passagens de tubos por aleta": "Informe quantos furos ou passagens de tubo existem em cada aleta.",
+  "Equipamento": "Escolha se o trocador funciona como evaporador ou condensador.",
+  "Superaquecimento na saída": "Informe quantos graus o vapor sai acima da temperatura de evaporação.",
+  "Superaquecimento na entrada": "Informe quantos graus o vapor entra acima da temperatura de saturação.",
+  "Sub-resfriamento na saída": "Informe quantos graus o líquido sai abaixo da temperatura de condensação.",
+  "Fração de vapor na região bifásica": "Estime qual porcentagem do volume bifásico é ocupada por vapor. Mantenha o valor sugerido se não tiver um cálculo específico.",
+  "Modo de cálculo": "Escolha informar uma proporção conhecida ou calcular a concentração necessária para uma temperatura de operação.",
+  "Produto": "Selecione o aditivo misturado à água. Cada produto possui densidade e proteção contra congelamento diferentes.",
+  "Concentração do produto": "Informe quantos litros do produto existem em cada 100 litros da solução final.",
+  "Temperatura de operação desejada": "Informe a menor temperatura normal de trabalho. A ferramenta acrescentará uma margem contra congelamento.",
+  "Volume final da solução": "Informe quantos litros de solução pronta deseja preparar.",
+  "Temperatura atual da solução": "Informe a temperatura em que deseja conhecer a densidade da mistura.",
+  "Estilo da cerveja": "Selecione o estilo mais próximo. Ele ajuda a estimar o açúcar residual e a carbonatação.",
+  "Teor alcoólico": "Informe o percentual de álcool indicado no rótulo ou na ficha da cerveja.",
+  "O que deseja calcular": "Escolha calcular a carga térmica a partir da vazão ou descobrir a vazão necessária para uma carga conhecida.",
+  "Líquido": "Selecione o líquido que passa pelo sistema. Densidade e calor específico serão ajustados automaticamente.",
+  "Temperatura de entrada": "Informe a temperatura do líquido antes de receber ou perder calor.",
+  "Temperatura de saída": "Informe a temperatura desejada ou medida depois da troca térmica.",
+  "Densidade": "Informe a massa de um litro do líquido, em kg/L, quando usar uma opção personalizada.",
+  "Calor específico": "Informe a energia necessária para alterar em 1 °C a temperatura de 1 kg do líquido.",
+  "Carga térmica": "Informe a quantidade de calor que precisa ser retirada por hora.",
+  "Faixa mínima": "Informe o menor percentual aceitável de utilização da capacidade do orifício.",
+  "Faixa máxima": "Informe o maior percentual aceitável de utilização da capacidade do orifício.",
+  "Pontos de medição": "Escolha uma leitura simples ou cinco pontos distribuídos no duto para obter uma média mais representativa.",
+  "Unidade do duto": "Escolha a unidade usada nas dimensões físicas do duto.",
+  "Volume coletado": "Informe quantos litros foram coletados durante o teste de vazão.",
+  "Tempo de coleta": "Informe quantos segundos foram necessários para coletar o volume indicado.",
+  "Escolha a forma geométrica": "Selecione a figura ou o sólido correspondente à peça que deseja calcular.",
+  "Medidas informadas em": "Escolha a unidade usada em todas as dimensões digitadas.",
+  "Unidade das medidas informadas": "Escolha a unidade usada nas dimensões da forma geométrica.",
+};
+
+function getFieldHelp(label: string, unit: string | undefined, kind: "valor" | "seleção") {
+  if (fieldHelp[label]) return fieldHelp[label];
+  if (/^Velocidade no ponto/.test(label)) return "Meça a velocidade do ar neste ponto com um anemômetro, mantendo o sensor alinhado ao fluxo.";
+  const normalized = label.toLocaleLowerCase("pt-BR");
+  if (normalized.includes("temperatura")) return `Informe a temperatura correspondente a “${label}”${unit ? ` em ${unit}` : ""}. Use um sensor em contato firme e aguarde a leitura estabilizar.`;
+  if (normalized.includes("pressão")) return `Informe a pressão correspondente a “${label}”${unit ? ` em ${unit}` : ""}, medida com o sistema estabilizado.`;
+  if (normalized.includes("diâmetro")) return `Informe o diâmetro indicado${unit ? ` em ${unit}` : ""}, medindo de uma borda à outra pelo centro.`;
+  if (/(altura|largura|comprimento|raio|base|lado|profundidade)/.test(normalized)) return `Informe a medida de “${label}”${unit ? ` em ${unit}` : ""}. Use a mesma referência de unidade escolhida no cálculo.`;
+  if (normalized.includes("vazão")) return `Informe a vazão correspondente a “${label}”${unit ? ` em ${unit}` : ""}.`;
+  if (normalized.includes("tempo")) return `Informe o tempo correspondente a “${label}”${unit ? ` em ${unit}` : ""}, contado do início ao fim do ensaio.`;
+  if (normalized.includes("volume")) return `Informe o volume correspondente a “${label}”${unit ? ` em ${unit}` : ""}.`;
+  if (normalized.includes("potência")) return `Informe a potência correspondente a “${label}”${unit ? ` em ${unit}` : ""}. Verifique se é potência elétrica consumida ou capacidade térmica.`;
+  if (normalized.includes("corrente")) return `Informe a corrente elétrica correspondente a “${label}”${unit ? ` em ${unit}` : ""}.`;
+  if (normalized.includes("unidade")) return "Selecione a unidade que corresponde exatamente ao valor ou às medidas informadas.";
+  if (normalized.includes("modo") || normalized.includes("calcular")) return "Selecione a opção que representa o tipo de cálculo ou os dados que você possui.";
+  if (normalized.includes("quantidade") || normalized.includes("número")) return `Informe a quantidade correspondente a “${label}”, usando um número inteiro quando se tratar de peças.`;
+  if (kind === "seleção") return `Selecione a opção que melhor representa “${label}”. Essa escolha altera as fórmulas e os resultados exibidos.`;
+  return `Informe o valor de “${label}”${unit ? ` em ${unit}` : ""}. Toque novamente no ? para fechar esta orientação.`;
+}
+
+function FieldHelp({ label, unit, kind, helpId }: { label: string; unit?: string; kind: "valor" | "seleção"; helpId: string }) {
+  const help = getFieldHelp(label, unit, kind);
+  return (
+    <details className="field-help">
+      <summary aria-label={`Ajuda sobre ${label}`} title={`Ajuda sobre ${label}`}>?</summary>
+      <span id={helpId} role="note"><strong>{label}</strong>{help}</span>
+    </details>
+  );
+}
+
 function Field({
   label,
   unit,
@@ -477,20 +613,26 @@ function Field({
   placeholder?: string;
   allowNegative?: boolean;
 }) {
+  const inputId = useId();
+  const helpId = `${inputId}-help`;
+
   function toggleSign() {
     if (value.startsWith("-")) onChange(value.slice(1));
     else onChange(value ? `-${value}` : "-");
   }
 
   return (
-    <label className="field">
-      <span>{label}</span>
-      <div>
+    <div className="field">
+      <div className="field-heading">
+        <label htmlFor={inputId}>{label}</label>
+        <FieldHelp label={label} unit={unit} kind="valor" helpId={helpId} />
+      </div>
+      <div className="field-input">
         {allowNegative && <button type="button" className={value.startsWith("-") ? "sign-toggle negative" : "sign-toggle"} onClick={toggleSign} aria-label={value.startsWith("-") ? "Remover sinal negativo" : "Adicionar sinal negativo"}>{value.startsWith("-") ? "−" : "±"}</button>}
-        <input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+        <input id={inputId} aria-describedby={helpId} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
         {unit && <b>{unit}</b>}
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -505,13 +647,18 @@ function SelectField({
   onChange: (value: string) => void;
   options: string[];
 }) {
+  const selectId = useId();
+  const helpId = `${selectId}-help`;
   return (
-    <label className="field">
-      <span>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
+    <div className="field">
+      <div className="field-heading">
+        <label htmlFor={selectId}>{label}</label>
+        <FieldHelp label={label} kind="seleção" helpId={helpId} />
+      </div>
+      <select id={selectId} aria-describedby={helpId} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((item) => <option key={item}>{item}</option>)}
       </select>
-    </label>
+    </div>
   );
 }
 
