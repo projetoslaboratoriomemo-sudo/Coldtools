@@ -57,23 +57,34 @@ function IntroScreen({ onEnter }: { onEnter: () => void }) {
       connection?: { saveData?: boolean };
     };
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const limitedProcessor = typeof device.hardwareConcurrency === "number" && device.hardwareConcurrency <= 4;
-    const limitedMemory = typeof device.deviceMemory === "number" && device.deviceMemory <= 4;
-    if (reducedMotion || limitedProcessor || limitedMemory || device.connection?.saveData) {
+    const severelyLimitedMemory =
+      typeof device.deviceMemory === "number" && device.deviceMemory <= 2;
+    if (reducedMotion || severelyLimitedMemory || device.connection?.saveData) {
       setLiteMode(true);
     }
 
-    let firstFrame = 0;
-    let frameRequest = window.requestAnimationFrame((timestamp) => {
-      firstFrame = timestamp;
-      frameRequest = window.requestAnimationFrame((nextTimestamp) => {
-        if (nextTimestamp - firstFrame > 120) setLiteMode(true);
-      });
-    });
+    let frameRequest = 0;
+    let sampledFrames = 0;
+    let slowFrames = 0;
+    let previousFrame = 0;
+    const measurePerformance = (timestamp: number) => {
+      if (previousFrame && timestamp - previousFrame > 180) slowFrames += 1;
+      previousFrame = timestamp;
+      sampledFrames += 1;
+      if (sampledFrames >= 12) {
+        if (slowFrames >= 3) setLiteMode(true);
+        return;
+      }
+      frameRequest = window.requestAnimationFrame(measurePerformance);
+    };
+    const performanceTimer = window.setTimeout(() => {
+      frameRequest = window.requestAnimationFrame(measurePerformance);
+    }, 500);
     const settleTimer = window.setTimeout(() => setSettled(true), 8500);
 
     return () => {
       window.cancelAnimationFrame(frameRequest);
+      window.clearTimeout(performanceTimer);
       window.clearTimeout(settleTimer);
     };
   }, []);
