@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: "/caneca-rf.svg", type: "image/svg+xml" }],
     shortcut: ["/caneca-rf.svg"],
-    apple: [{ url: "/caneca-rf.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
