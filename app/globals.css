@@ -90,12 +90,21 @@ main { grid-column: 2; min-width: 0; }
 .calc-intro { color: var(--muted); line-height: 1.6; margin: 5px 0 22px; }
 .form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
 .field { display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; }
-.field > span { text-transform: uppercase; letter-spacing: .06em; }
-.field > div { height: 54px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 11px; background: rgba(10,14,16,.38); overflow: hidden; }
+.field-heading { min-height: 23px; display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; overflow: visible; }
+.field-heading > label { text-transform: uppercase; letter-spacing: .06em; line-height: 1.3; cursor: pointer; }
+.field-input { height: 54px; display: flex; align-items: center; border: 1px solid var(--line); border-radius: 11px; background: rgba(10,14,16,.38); overflow: hidden; }
 .field input, .field select, .field > select { width: 100%; height: 54px; padding: 0 14px; border: 1px solid var(--line); border-radius: 11px; outline: 0; color: var(--text); background: rgba(10,14,16,.38); }
-.field > div input { border: 0; height: 100%; background: transparent; }
+.field-input input { border: 0; height: 100%; background: transparent; }
 .field input:focus, .field select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(102,209,122,.11); }
 .field b { padding: 0 14px; color: var(--green); font-size: 12px; }
+.field-help { position: relative; z-index: 4; flex: 0 0 auto; }
+.field-help[open] { z-index: 40; }
+.field-help summary { width: 22px; height: 22px; border: 1px solid rgba(112,217,255,.55); border-radius: 50%; background: rgba(112,217,255,.08); color: #70d9ff; display: grid; place-items: center; list-style: none; cursor: help; font-size: 12px; font-weight: 900; transition: .16s ease; }
+.field-help summary::-webkit-details-marker { display: none; }
+.field-help summary:hover, .field-help summary:focus-visible, .field-help[open] summary { color: #101614; border-color: #70d9ff; background: #70d9ff; outline: 0; box-shadow: 0 0 0 3px rgba(112,217,255,.12); }
+.field-help > span { position: absolute; z-index: 50; top: 29px; right: 0; width: min(300px,78vw); padding: 14px 15px; border: 1px solid rgba(112,217,255,.38); border-radius: 11px; background: #172126; color: #dce6e2; box-shadow: 0 16px 40px rgba(0,0,0,.42); font-size: 12px; font-weight: 500; line-height: 1.5; text-transform: none; letter-spacing: normal; }
+.field-help > span::before { content: ""; position: absolute; top: -6px; right: 5px; width: 10px; height: 10px; border-left: 1px solid rgba(112,217,255,.38); border-top: 1px solid rgba(112,217,255,.38); background: #172126; transform: rotate(45deg); }
+.field-help > span strong { display: block; margin-bottom: 5px; color: #70d9ff; font-size: 10px; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
 .secondary { min-height: 46px; margin-top: 20px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); padding: 0 18px; cursor: pointer; }
 .secondary:hover { color: var(--text); border-color: var(--muted); }
 .result-card { position: sticky; top: 92px; border-color: rgba(102,209,122,.32); }
