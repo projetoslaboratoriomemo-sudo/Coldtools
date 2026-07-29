@@ -109,6 +109,12 @@ main { grid-column: 2; min-width: 0; }
 .result-badge.warning { border-color: var(--amber); color: var(--amber); background: rgba(242,169,59,.07); }
 .conditions { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 20px; }
 .conditions span { border: 1px solid var(--line); border-radius: 99px; color: var(--muted); padding: 7px 10px; font-size: 10px; }
+.coil-scenario-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin-top: 24px; }
+.coil-scenario-grid > span { min-height: 105px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: rgba(8,12,14,.32); }
+.coil-scenario-grid small, .coil-scenario-grid strong, .coil-scenario-grid em { display: block; }
+.coil-scenario-grid small { color: var(--amber); font-size: 9px; font-weight: 850; letter-spacing: .09em; }
+.coil-scenario-grid strong { margin-top: 9px; font-size: 24px; }
+.coil-scenario-grid em { margin-top: 6px; color: var(--muted); font-size: 11px; font-style: normal; }
 .calc-card h3 { margin: 28px 0 12px; padding-top: 22px; border-top: 1px solid var(--line); font-size: 16px; }
 .cycle-error { padding: 16px; border: 1px solid rgba(255,107,95,.55); border-radius: 11px; background: rgba(255,107,95,.07); color: #ff9289; font-size: 13px; line-height: 1.55; }
 .cycle-report { margin-top: 20px; border: 1px solid rgba(242,169,59,.35); border-radius: 18px; background: linear-gradient(145deg, rgba(42,49,54,.88), rgba(24,30,33,.97)); padding: 28px; overflow: hidden; }
@@ -231,7 +237,7 @@ main { grid-column: 2; min-width: 0; }
   .tool-title h1 { font-size: 38px; }
   .calculator-layout { margin-top: 24px; }
   .calc-card, .result-card, .choice-section, .strobe-card { padding: 20px; }
-  .form-grid, .choice-grid, .installation-grid { grid-template-columns: 1fr; }
+  .form-grid, .choice-grid, .installation-grid, .coil-scenario-grid { grid-template-columns: 1fr; }
   .cycle-report { padding: 17px; }
   .cycle-kpis, .cycle-balance { grid-template-columns: 1fr; }
   .cycle-visual-grid { margin-top: 18px; }
