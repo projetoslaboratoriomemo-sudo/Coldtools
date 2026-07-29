@@ -17,8 +17,9 @@ export const metadata: Metadata = {
   description:
     "Cálculos elétricos, refrigeração, vazão e medições para técnicos em campo.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: [{ url: "/caneca-rf.svg", type: "image/svg+xml" }],
+    shortcut: ["/caneca-rf.svg"],
+    apple: [{ url: "/caneca-rf.svg", type: "image/svg+xml" }],
   },
 };
 
