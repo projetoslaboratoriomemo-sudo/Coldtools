@@ -65,7 +65,14 @@ export async function POST(request: Request) {
     const subcooling = finite(body.subcooling, Number.NaN);
     const displacement = Math.max(0, finite(body.displacement));
     const rpm = Math.max(0, finite(body.rpm));
-    const volumetricEfficiency = Math.min(.98, Math.max(.05, finite(body.volumetricEfficiency, 70) / 100));
+    const informedVolumetricEfficiency = Math.min(.98, Math.max(.05, finite(body.volumetricEfficiency, 70) / 100));
+    const measuredEvaporatorCapacityKw = body.measuredEvaporatorCapacityKw === null
+      || body.measuredEvaporatorCapacityKw === undefined
+      || body.measuredEvaporatorCapacityKw === ""
+      ? Number.NaN
+      : finite(body.measuredEvaporatorCapacityKw, Number.NaN);
+    const calculateVolumetricEfficiency = Number.isFinite(measuredEvaporatorCapacityKw)
+      && measuredEvaporatorCapacityKw > 0;
     const informedIsentropicEfficiency = Math.min(.98, Math.max(.05, finite(body.isentropicEfficiency, 65) / 100));
     const measuredDischargeCelsius = body.dischargeTemperature === null
       || body.dischargeTemperature === undefined
@@ -88,6 +95,12 @@ export async function POST(request: Request) {
     }
     if (superheat < 0 || subcooling < 0) {
       return NextResponse.json({ error: "Superaquecimento e sub-resfriamento não podem ser negativos." }, { status: 400 });
+    }
+    if (calculateVolumetricEfficiency && (displacement <= 0 || rpm <= 0)) {
+      return NextResponse.json(
+        { error: "Para calcular a eficiência volumétrica prática, informe o deslocamento e a rotação do compressor." },
+        { status: 400 },
+      );
     }
 
     const coolProp = await getCoolProp();
@@ -164,10 +177,34 @@ export async function POST(request: Request) {
     const eer = cop * 3.412142;
     const specificVolume = 1 / rho1;
     const displacementFlow = displacement * 1e-6 * rpm * 60;
-    const suctionFlow = displacementFlow * volumetricEfficiency;
-    const massFlowKgH = suctionFlow / specificVolume;
+    const practicalMassFlowKgS = calculateVolumetricEfficiency
+      ? measuredEvaporatorCapacityKw / refrigerationEffect
+      : Number.NaN;
+    const practicalMassFlowKgH = practicalMassFlowKgS * 3600;
+    const practicalSuctionFlowM3H = practicalMassFlowKgH * specificVolume;
+    const calculatedVolumetricEfficiency = calculateVolumetricEfficiency
+      ? practicalSuctionFlowM3H / displacementFlow
+      : Number.NaN;
+    const volumetricEfficiency = calculateVolumetricEfficiency
+      ? calculatedVolumetricEfficiency
+      : informedVolumetricEfficiency;
+    const volumetricEfficiencyWarning = !calculateVolumetricEfficiency
+      ? null
+      : calculatedVolumetricEfficiency > 1
+        ? "A eficiência volumétrica prática ficou acima de 100%. Revise a vazão do líquido, as temperaturas, o deslocamento e a rotação do compressor."
+        : calculatedVolumetricEfficiency < .2
+          ? "A eficiência volumétrica prática ficou muito baixa. Confirme se o ensaio estava estabilizado e se toda a carga térmica foi considerada."
+          : null;
+    const suctionFlow = calculateVolumetricEfficiency
+      ? practicalSuctionFlowM3H
+      : displacementFlow * volumetricEfficiency;
+    const massFlowKgH = calculateVolumetricEfficiency
+      ? practicalMassFlowKgH
+      : suctionFlow / specificVolume;
     const massFlowKgS = massFlowKgH / 3600;
-    const evaporatorCapacityKw = refrigerationEffect * massFlowKgS;
+    const evaporatorCapacityKw = calculateVolumetricEfficiency
+      ? measuredEvaporatorCapacityKw
+      : refrigerationEffect * massFlowKgS;
     const compressorPowerKw = compressorWork * massFlowKgS;
     const condenserCapacityKw = condenserHeat * massFlowKgS;
 
@@ -249,6 +286,17 @@ export async function POST(request: Request) {
             && measuredDischargeTemperatureK > condensingDewK
           : true,
         warning: efficiencyWarning,
+      },
+      volumetricEfficiency: {
+        source: calculateVolumetricEfficiency ? "liquid-test" : "informed",
+        value: volumetricEfficiency * 100,
+        valid: calculateVolumetricEfficiency
+          ? volumetricEfficiency > 0 && volumetricEfficiency <= 1
+          : true,
+        warning: volumetricEfficiencyWarning,
+        measuredEvaporatorCapacityKw: calculateVolumetricEfficiency
+          ? measuredEvaporatorCapacityKw
+          : null,
       },
       compressor: {
         hasEstimate: hasCompressorEstimate,
