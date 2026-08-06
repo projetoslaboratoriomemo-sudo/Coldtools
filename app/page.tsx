@@ -4,6 +4,11 @@ import { useEffect, useId, useMemo, useState } from "react";
 
 type Category = "Início" | "Elétrica" | "Refrigeração" | "Vazão" | "Geometria";
 
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
 type Tool = {
   id: string;
   title: string;
@@ -232,6 +237,52 @@ export default function Home() {
   const [category, setCategory] = useState<Category>("Início");
   const [query, setQuery] = useState("");
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [isIos, setIsIos] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    }
+
+    const environmentTimer = window.setTimeout(() => {
+      const standalone =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        (navigator as Navigator & { standalone?: boolean }).standalone === true;
+      setIsInstalled(standalone);
+      setIsIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
+    }, 0);
+
+    const capturePrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    const markInstalled = () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+      setShowInstallHelp(false);
+    };
+
+    window.addEventListener("beforeinstallprompt", capturePrompt);
+    window.addEventListener("appinstalled", markInstalled);
+    return () => {
+      window.clearTimeout(environmentTimer);
+      window.removeEventListener("beforeinstallprompt", capturePrompt);
+      window.removeEventListener("appinstalled", markInstalled);
+    };
+  }, []);
+
+  async function installApp() {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === "accepted") setInstallPrompt(null);
+      return;
+    }
+    setShowInstallHelp(true);
+  }
 
   const visibleTools = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("pt-BR");
@@ -284,7 +335,13 @@ export default function Home() {
       <main>
         <header className="topbar">
           <div className="status"><i /> Sistema operacional <b>Tudo em ordem</b></div>
-          <div className="top-actions"><span>Modo offline disponível</span><button aria-label="Perfil do técnico">RF</button></div>
+          <div className="top-actions">
+            <span>Modo offline disponível</span>
+            {!isInstalled && (installPrompt || isIos) && (
+              <button className="install-app" onClick={installApp}>Instalar app</button>
+            )}
+            <button aria-label="Perfil do técnico">RF</button>
+          </div>
         </header>
 
         <section className="workspace">
@@ -358,6 +415,24 @@ export default function Home() {
           </button>
         ))}
       </nav>
+
+      {showInstallHelp && (
+        <div className="install-overlay" role="presentation" onClick={() => setShowInstallHelp(false)}>
+          <section className="install-dialog" role="dialog" aria-modal="true" aria-labelledby="install-title" onClick={(event) => event.stopPropagation()}>
+            <img src="/apple-touch-icon.png" alt="Ícone do Coldtools" />
+            <div>
+              <small>INSTALAR NO IPHONE OU IPAD</small>
+              <h2 id="install-title">Adicione o Coldtools à Tela de Início</h2>
+              <ol>
+                <li>No Safari, toque em <strong>Compartilhar</strong> <span aria-hidden="true">□↑</span>.</li>
+                <li>Escolha <strong>Adicionar à Tela de Início</strong>.</li>
+                <li>Confirme em <strong>Adicionar</strong>.</li>
+              </ol>
+              <button onClick={() => setShowInstallHelp(false)}>Entendi</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
